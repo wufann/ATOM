@@ -10,7 +10,11 @@ from aiter.ops.triton.fused_kv_cache import fused_qk_rope_reshape_and_cache
 from aiter.ops.triton.gluon.pa_decode_gluon import get_recommended_splits
 from aiter.ops.triton.unified_attention import unified_attention
 from atom.config import get_current_atom_config
-from atom.utils.forward_context import ForwardContext, get_forward_context
+from atom.utils.forward_context import (
+    ForwardContext,
+    get_attn_metadata_for_layer,
+    get_forward_context,
+)
 from torch import nn
 
 from .attention_mla import MLAModules
@@ -92,7 +96,11 @@ class Attention(nn.Module):
         return o
 
     def rope_cache(self, q, k, v, qkv, position, fwd_ctx: ForwardContext):
-        attn_metadata = fwd_ctx.attn_metadata
+        attn_metadata = (
+            get_attn_metadata_for_layer(fwd_ctx, self.layer_num)
+            if isinstance(fwd_ctx.attn_metadata, dict)
+            else fwd_ctx.attn_metadata
+        )
         kv_cache_data = fwd_ctx.kv_cache_data
 
         k_cache = kv_cache_data[f"layer_{self.layer_num}"].k_cache
@@ -199,7 +207,11 @@ class Attention(nn.Module):
         self, q, k, v, k_cache, v_cache, k_scale, v_scale, fwd_ctx: ForwardContext
     ):
 
-        attn_metadata = fwd_ctx.attn_metadata
+        attn_metadata = (
+            get_attn_metadata_for_layer(fwd_ctx, self.layer_num)
+            if isinstance(fwd_ctx.attn_metadata, dict)
+            else fwd_ctx.attn_metadata
+        )
 
         o = torch.empty_like(q)
         num_seqs, num_q_heads_total, head_size = q.shape
@@ -272,7 +284,11 @@ class Attention(nn.Module):
         self, q, k, v, k_cache, v_cache, k_scale, v_scale, fwd_ctx: ForwardContext
     ):
 
-        attn_metadata = fwd_ctx.attn_metadata
+        attn_metadata = (
+            get_attn_metadata_for_layer(fwd_ctx, self.layer_num)
+            if isinstance(fwd_ctx.attn_metadata, dict)
+            else fwd_ctx.attn_metadata
+        )
         o = aiter.pa_fwd_asm(
             q,
             k_cache,
@@ -291,7 +307,11 @@ class Attention(nn.Module):
     def paged_attention_persistent_asm(
         self, q, k, v, k_cache, v_cache, k_scale, v_scale, fwd_ctx: ForwardContext
     ):
-        attn_metadata = fwd_ctx.attn_metadata
+        attn_metadata = (
+            get_attn_metadata_for_layer(fwd_ctx, self.layer_num)
+            if isinstance(fwd_ctx.attn_metadata, dict)
+            else fwd_ctx.attn_metadata
+        )
         output = torch.empty_like(q)
 
         aiter.pa_persistent_fwd(
@@ -322,7 +342,11 @@ class Attention(nn.Module):
     ):
 
         # variable lenth attention use key value as input
-        attn_metadata = fwd_ctx.attn_metadata
+        attn_metadata = (
+            get_attn_metadata_for_layer(fwd_ctx, self.layer_num)
+            if isinstance(fwd_ctx.attn_metadata, dict)
+            else fwd_ctx.attn_metadata
+        )
         sliding_window = (
             (self.sliding_window, 0, 0)
             if self.sliding_window is not None
@@ -363,7 +387,11 @@ class Attention(nn.Module):
         # key:    [num_blocks, 1, num_kv_heads, head_size]
         # value:  [num_blocks, 1, num_kv_heads, head_size]
 
-        attn_metadata = fwd_ctx.attn_metadata
+        attn_metadata = (
+            get_attn_metadata_for_layer(fwd_ctx, self.layer_num)
+            if isinstance(fwd_ctx.attn_metadata, dict)
+            else fwd_ctx.attn_metadata
+        )
         ctx = fwd_ctx.context
 
         block_tables = attn_metadata.block_tables

@@ -371,6 +371,7 @@ def get_quant_config(config: PretrainedConfig) -> QuantizationConfig:
 
 _CONFIG_REGISTRY: dict[str, str] = {
     "deepseek_v32": "deepseek_v3",
+    "glm_moe_dsa": "deepseek_v3",  # GLM 5.0 MoE, structure similar to DeepSeek v3.2
 }
 
 
@@ -692,7 +693,7 @@ def set_current_atom_config(atom_config: Config):
     # for MoE to check
     import os
 
-    os.environ["ATOM_ENFORCE_EAGER"] = "1" if atom_config.enforce_eager else "0"
+    # os.environ["ATOM_ENFORCE_EAGER"] = "1" if atom_config.enforce_eager else "0"
 
 
 def get_current_atom_config() -> Config:

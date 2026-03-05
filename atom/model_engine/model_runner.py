@@ -5,6 +5,7 @@ import logging
 import math
 import os
 import time
+from dataclasses import dataclass
 from typing import Any, Optional, Union
 
 import numpy as np
@@ -36,6 +37,7 @@ from atom.utils.forward_context import (
     Context,
     DPMetadata,
     SpecDecodeMetadata,
+    get_attn_metadata_for_layer,
     get_forward_context,
     reset_forward_context,
     set_forward_context,
@@ -45,6 +47,19 @@ from atom.utils.selector import get_attn_backend
 
 logger = logging.getLogger("atom")
 
+
+@dataclass
+class AttentionGroup:
+    """
+    Used for multi-type attention.
+    """
+
+    backend: type  # AttentionBackend class
+    layer_ids: list[int]
+    layer_names: list[str]
+    metadata_builder: Any  # AttentionMetadataBuilder instance
+
+
 support_model_arch_dict = {
     "Qwen3ForCausalLM": "atom.models.qwen3.Qwen3ForCausalLM",
     "Qwen3MoeForCausalLM": "atom.models.qwen3_moe.Qwen3MoeForCausalLM",
@@ -53,6 +68,7 @@ support_model_arch_dict = {
     "DeepseekV3ForCausalLM": "atom.models.deepseek_v2.DeepseekV2ForCausalLM",
     "DeepseekV32ForCausalLM": "atom.models.deepseek_v2.DeepseekV2ForCausalLM",
     "GptOssForCausalLM": "atom.models.gpt_oss.GptOssForCausalLM",
+    "GlmMoeDsaForCausalLM": "atom.models.deepseek_v2.GlmMoeDsaForCausalLM",
     "Glm4MoeForCausalLM": "atom.models.glm4_moe.Glm4MoeForCausalLM",
     "Qwen3NextForCausalLM": "atom.models.qwen3_next.Qwen3NextForCausalLM",
 }
@@ -131,19 +147,34 @@ class tokenIDProcessor:
         event.synchronize()
         return token_ids.numpy()
 
-    def send_rejected_to_cpu_async(self, gpu_tensor: torch.Tensor):
+    def send_mtp_status_to_cpu_async(
+        self, num_rejected: torch.Tensor, num_bonus: torch.Tensor
+    ):
+        # rejected num and bonus num are slightly different info for mtp
+        # take mtp=1 for example:
+        #   first decode after prefill have 0 rej, 0 bonus
+        #   prev acc decode have 0 rej, 1 bonus
+        #   prev rej decode have 1 rej, 0 bonus
+        # It is clear that only rejected number is not sufficient for all status tracking, bonus number is also needed.
         default_stream = torch.cuda.current_stream()
         with torch.cuda.stream(self.async_copy_stream):
             self.async_copy_stream.wait_stream(default_stream)
-            cpu_tensor = gpu_tensor.to("cpu", non_blocking=True)
+            num_rejected_cpu = num_rejected.to("cpu", non_blocking=True)
+            num_bonus_cpu = num_bonus.to("cpu", non_blocking=True)
             self.async_copy_event.record(self.async_copy_stream)
-        self.rejected_tokens_cpu.append(cpu_tensor)
+        self.rejected_tokens_cpu.append(num_rejected_cpu)
+        self.bonus_tokens_cpu.append(num_bonus_cpu)
 
-    def recv_rejected_async(self) -> Optional[np.ndarray]:
+    def recv_mtp_status_async(
+        self,
+    ) -> tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         if not self.rejected_tokens_cpu:
-            return None
+            return None, None
         self.async_copy_event.synchronize()
-        return self.rejected_tokens_cpu.pop(0).numpy()
+        return (
+            self.rejected_tokens_cpu.pop(0).numpy(),
+            self.bonus_tokens_cpu.pop(0).numpy(),
+        )
 
     def clean(self):
         self.token_ids_cpu: list[torch.Tensor] = []
@@ -156,6 +187,7 @@ class tokenIDProcessor:
         self.rejected_tokens_cpu: list[torch.Tensor] = (
             []
         )  # Async queue for num_bonus_tokens
+        self.bonus_tokens_cpu: list[torch.Tensor] = []
         self.mapped_bonus_list: Optional[list[int]] = (
             None  # Mapped to current batch order
         )
@@ -270,7 +302,7 @@ class tokenIDProcessor:
         ]
         self.input_ids.copy_to_gpu(total_tokens_prefill)
 
-        self.prev_rejected_num = self.recv_rejected_async()
+        self.prev_rejected_num, self.prev_bonus_num = self.recv_mtp_status_async()
 
         # TODO: remove this when we support mixed prefill and decode in one batch
         if total_reqs_prefill > 0:
@@ -305,9 +337,13 @@ class tokenIDProcessor:
 
         # Receive and map bonus_list to current batch order
         self.num_rejected = batch.num_rejected
+        self.num_bonus = batch.num_bonus
         if num_deferred_seqs > 0 and self.prev_rejected_num is not None:
             # Map: prev_bonus_list[prev_idx] → mapped_bonus_list[curr_idx]
             self.num_rejected[deferred_curr_indices] = self.prev_rejected_num[
+                deferred_prev_indices
+            ]
+            self.num_bonus[deferred_curr_indices] = self.prev_bonus_num[
                 deferred_prev_indices
             ]
 
@@ -445,6 +481,7 @@ class ModelRunner:
         self.config = config
         set_current_atom_config(config)
         hf_config = config.hf_config
+        # hf_config.num_hidden_layers = 10
         self.block_size = config.kv_cache_block_size
         self.enforce_eager = config.enforce_eager
         self.world_size = config.tensor_parallel_size
@@ -513,11 +550,17 @@ class ModelRunner:
         default_dtype = self.config.torch_dtype
         torch.set_default_dtype(default_dtype)
         torch.set_default_device(self.device)
+        # GLM-5 (glm_moe_dsa) uses MHA kernel for decode; use aiter_attention backend for metadata
+        use_mla_for_backend = self.use_mla and (
+            getattr(hf_config, "model_type", None) != "glm_moe_dsa"
+        )
+        # use_mla_for_backend = True
         self.attn_backend = get_attn_backend(
             self.block_size,
-            use_mla=self.use_mla,
+            use_mla=use_mla_for_backend,
             use_gdn=self.use_gdn,
         )
+        self.attn_groups: list[AttentionGroup] = []
         if self.config.speculative_config and get_pp_group().is_last_rank:
             from atom.utils.backends import set_model_tag
 
@@ -526,12 +569,12 @@ class ModelRunner:
             self.rejection_sampler = RejectionSampler()
             self.mtp_total_draft_tokens = 0
             self.mtp_total_accepted_tokens = 0
-        num_spec_tokens = self.drafter.mtp_k if hasattr(self, "drafter") else 0
+        self.num_spec_tokens = self.drafter.mtp_k if hasattr(self, "drafter") else 0
         self.tokenID_processor = tokenIDProcessor(
             self,
             self.config.max_num_batched_tokens,
             hasattr(self, "drafter"),
-            num_spec_tokens,
+            self.num_spec_tokens,
         )
         self.sampler = Sampler()
         self.arange_np = np.arange(
@@ -554,8 +597,13 @@ class ModelRunner:
             self.drafter.load_model(self.model)
         torch.set_default_device(self.device)
         self.allocate_forward_vars()
-        self.attn_metadata_builder = self.attn_backend.get_builder_cls()(self)
-        self.physical_block_size = self.attn_metadata_builder.block_size
+        if self.is_multi_type_attention():
+            self._initialize_attn_groups()
+            self.physical_block_size = self.attn_groups[0].metadata_builder.block_size
+            self.attn_metadata_builder = self.attn_groups[0].metadata_builder
+        else:
+            self.attn_metadata_builder = self.attn_backend.get_builder_cls()(self)
+            self.physical_block_size = self.attn_metadata_builder.block_size
         self.forward_done_event = torch.cuda.Event()
         self.warmup_model()
         logger.info(f"Model warmup done: {config.model}")
@@ -574,6 +622,7 @@ class ModelRunner:
             "deepseek_v3",
             "deepseek_v32",
             "deepseek_mtp",
+            "glm_moe_dsa",
         ):
             return self.hf_text_config.kv_lora_rank is not None
         elif self.hf_text_config.model_type == "eagle":
@@ -591,6 +640,69 @@ class ModelRunner:
         elif self.hf_text_config.model_type in ("qwen3_next",):
             return True
         return False
+
+    def _get_attention_layer_types(
+        self, model: torch.nn.Module
+    ) -> list[tuple[int, bool, str]]:
+        result: list[tuple[int, bool, str]] = []
+        layer_id = 0
+        for module in model.modules():
+            if hasattr(module, "base_attention"):
+                use_mla = getattr(module, "use_mla", False)
+                layer_name = getattr(
+                    module, "layer_name", f"{'MLA' if use_mla else 'MHA'}_{layer_id}"
+                )
+                result.append((layer_id, use_mla, layer_name))
+                layer_id += 1
+        return result
+
+    def is_multi_type_attention(self) -> bool:
+        if not hasattr(self, "model"):
+            return False
+        types = self._get_attention_layer_types(self.model)
+        if not types:
+            return False
+        has_mla = any(use_mla for _, use_mla, _ in types)
+        has_mha = any(not use_mla for _, use_mla, _ in types)
+        return has_mla and has_mha
+
+    def _initialize_attn_groups(self) -> None:
+        types = self._get_attention_layer_types(self.model)
+        mha_entries = [(layer_id, name) for layer_id, use_mla, name in types if not use_mla]
+        mla_entries = [(layer_id, name) for layer_id, use_mla, name in types if use_mla]
+        self.attn_groups = []
+        if mha_entries:
+            mha_backend = get_attn_backend(
+                self.block_size, use_mla=False, use_gdn=self.use_gdn
+            )
+            mha_builder = mha_backend.get_builder_cls()(self)
+            self.attn_groups.append(
+                AttentionGroup(
+                    backend=mha_backend,
+                    layer_ids=[e[0] for e in mha_entries],
+                    layer_names=[e[1] for e in mha_entries],
+                    metadata_builder=mha_builder,
+                )
+            )
+        if mla_entries:
+            mla_backend = get_attn_backend(
+                self.block_size, use_mla=True, use_gdn=self.use_gdn
+            )
+            mla_builder = mla_backend.get_builder_cls()(self)
+            self.attn_groups.append(
+                AttentionGroup(
+                    backend=mla_backend,
+                    layer_ids=[e[0] for e in mla_entries],
+                    layer_names=[e[1] for e in mla_entries],
+                    metadata_builder=mla_builder,
+                )
+            )
+        logger.info(
+            "Multi-type attention: %d groups (MHA: %d layers, MLA: %d layers)",
+            len(self.attn_groups),
+            len(mha_entries),
+            len(mla_entries),
+        )
 
     def get_mtp_statistics(self) -> dict:
         if hasattr(self, "mtp_total_draft_tokens"):
@@ -840,6 +952,9 @@ class ModelRunner:
         }
         if hasattr(self, "drafter"):
             self.forward_vars["mtp_k"] = self.drafter.mtp_k
+            self.forward_vars["num_accepted_tokens"] = CpuGpuBuffer(
+                self.max_bs, **i32_kwargs
+            )
 
     def get_num_blocks(self):
         torch.set_default_device(self.device)
@@ -859,23 +974,7 @@ class ModelRunner:
         else:
             assert self.world_size % hf_config.num_key_value_heads == 0
             num_kv_heads = 1
-        if self.use_mla:
-            block_bytes = (
-                hf_config.num_hidden_layers
-                * self.block_size
-                * 576
-                * dtypes.d_dtypes[config.kv_cache_dtype].itemsize
-            )
-            if self.is_deepseek_v32:
-                index_dim = hf_config.index_head_dim + 4
-                aligned_index_dim = ((index_dim + 15) // 16) * 16
-                block_bytes += (
-                    hf_config.num_hidden_layers
-                    * self.block_size
-                    * aligned_index_dim
-                    * dtypes.fp8.itemsize
-                )
-        elif self.is_qwen_next():
+        if self.is_qwen_next():
             self.full_attention_interval = hf_config.full_attention_interval
             self.num_full_attn = (
                 hf_config.num_hidden_layers // self.full_attention_interval
@@ -908,6 +1007,55 @@ class ModelRunner:
                 * dtypes.d_dtypes[config.kv_cache_dtype].itemsize
             )
             block_bytes = block_bytes + self.num_gdn_attn_state * one_layer_byte
+        elif self.is_multi_type_attention():
+            layer_types = self._get_attention_layer_types(self.model)
+            dtype_size = dtypes.d_dtypes[config.kv_cache_dtype].itemsize
+            mha_page_bytes = (
+                2
+                * self.physical_block_size
+                * num_kv_heads
+                * hf_config.head_dim
+                * dtype_size
+            )
+            mla_head_size = getattr(hf_config, "kv_lora_rank", None) or 576
+            mla_page_bytes = (
+                self.physical_block_size * mla_head_size * dtype_size
+            )
+            block_bytes = 0
+            for _, use_mla, _ in layer_types:
+                block_bytes += mla_page_bytes if use_mla else mha_page_bytes
+        elif self.use_mla:
+            use_mla_mha_decode = getattr(hf_config, "model_type", None) == "glm_moe_dsa"
+            # use_mla_mha_decode = False
+            if use_mla_mha_decode:
+                # GLM-5: MLA uses qk_head_dim (256) for KV cache head_dim
+                mha_decode_head_dim = getattr(
+                    hf_config, "qk_head_dim", hf_config.head_dim
+                )
+                block_bytes = (
+                    2
+                    * hf_config.num_hidden_layers
+                    * self.block_size
+                    * num_kv_heads
+                    * mha_decode_head_dim
+                    * dtypes.d_dtypes[config.kv_cache_dtype].itemsize
+                )
+            else:
+                block_bytes = (
+                    hf_config.num_hidden_layers
+                    * self.block_size
+                    * 576
+                    * dtypes.d_dtypes[config.kv_cache_dtype].itemsize
+                )
+            if self.is_deepseek_v32:
+                index_dim = hf_config.index_head_dim + 4
+                aligned_index_dim = ((index_dim + 15) // 16) * 16
+                block_bytes += (
+                    hf_config.num_hidden_layers
+                    * self.block_size
+                    * aligned_index_dim
+                    * dtypes.fp8.itemsize
+                )
         else:
             block_bytes = (
                 2
@@ -934,8 +1082,13 @@ class ModelRunner:
         config = self.config
         config.num_kvcache_blocks = num_kvcache_blocks
         hf_config = config.hf_config
+        builder = (
+            self.attn_groups[0].metadata_builder
+            if self.attn_groups
+            else self.attn_metadata_builder
+        )
         self.num_physical_kvcache_blocks = (
-            num_kvcache_blocks * self.attn_metadata_builder.block_ratio
+            num_kvcache_blocks * builder.block_ratio
         )
         if hf_config.num_key_value_heads >= self.world_size:
             assert hf_config.num_key_value_heads % self.world_size == 0
@@ -946,6 +1099,7 @@ class ModelRunner:
 
         # Calculate total number of layers (target + draft)
         total_num_layers = hf_config.num_hidden_layers
+        num_draft_layers = 0
         if self.config.speculative_config and hasattr(self, "drafter"):
             draft_hf_config = self.config.speculative_config.draft_model_hf_config
             # For MTP, use num_nextn_predict_layers instead of num_hidden_layers
@@ -956,29 +1110,7 @@ class ModelRunner:
                 f"{num_draft_layers} draft (MTP) layers = {total_num_layers} total layers"
             )
 
-        if self.use_mla:
-            self.kv_cache = torch.zeros(
-                total_num_layers,
-                self.num_physical_kvcache_blocks,
-                self.physical_block_size,
-                576,
-                dtype=dtypes.d_dtypes[config.kv_cache_dtype],
-                device="cuda",
-            )
-            if self.is_deepseek_v32:
-                # Align last dimension to 16 bytes for fp8 (1 byte per element)
-                # to avoid unaligned memory access in torch inductor
-                index_dim = hf_config.index_head_dim + 4
-                aligned_index_dim = ((index_dim + 15) // 16) * 16
-                self.index_cache = torch.zeros(
-                    hf_config.num_hidden_layers,
-                    self.num_physical_kvcache_blocks,
-                    self.physical_block_size,
-                    aligned_index_dim,
-                    dtype=dtypes.fp8,
-                    device="cuda",
-                )
-        elif self.is_qwen_next():
+        if self.is_qwen_next():
 
             self.kv_cache = torch.zeros(
                 2,
@@ -993,7 +1125,7 @@ class ModelRunner:
 
             self.kv_scale = torch.zeros(
                 2,
-                self.num_full_attn,
+                self.num_full_attn + num_draft_layers,
                 self.num_physical_kvcache_blocks,
                 num_kv_heads,
                 self.physical_block_size,
@@ -1006,9 +1138,9 @@ class ModelRunner:
                 hf_config.linear_num_key_heads,
                 hf_config.linear_num_value_heads,
                 hf_config.linear_key_head_dim,
-                hf_config.linear_key_head_dim,
+                hf_config.linear_value_head_dim,
                 hf_config.linear_conv_kernel_dim,
-                0,  # self.num_spec,
+                self.num_spec_tokens,  # self.num_spec,
             )
             self.mamba_k_cache = torch.zeros(
                 (self.num_gdn_attn_state, self.num_physical_kvcache_blocks)
@@ -1022,6 +1154,104 @@ class ModelRunner:
                 dtype=dtypes.d_dtypes[config.kv_cache_dtype],
                 device="cuda",
             )
+        elif self.is_multi_type_attention():
+            self.attn_layer_types = self._get_attention_layer_types(self.model)
+            mla_head_size = getattr(hf_config, "kv_lora_rank", None) or 576
+            kv_dtype = dtypes.d_dtypes[config.kv_cache_dtype]
+            self.kv_cache_list = []
+            self.kv_scale_list = []
+            for _layer_id, use_mla, _ in self.attn_layer_types:
+                if use_mla:
+                    t = torch.zeros(
+                        self.num_physical_kvcache_blocks
+                        * self.physical_block_size,
+                        1,
+                        mla_head_size,
+                        dtype=kv_dtype,
+                        device="cuda",
+                    )
+                    self.kv_cache_list.append(t)
+                    self.kv_scale_list.append(None)
+                else:
+                    t = torch.zeros(
+                        2,
+                        self.num_physical_kvcache_blocks,
+                        self.physical_block_size,
+                        num_kv_heads,
+                        hf_config.head_dim,
+                        dtype=kv_dtype,
+                        device="cuda",
+                    )
+                    self.kv_cache_list.append(t)
+                    if config.kv_cache_dtype == "fp8":
+                        k_scale = torch.zeros(
+                            self.num_physical_kvcache_blocks,
+                            num_kv_heads,
+                            self.physical_block_size,
+                            dtype=dtypes.fp32,
+                            device="cuda",
+                        )
+                        v_scale = torch.zeros(
+                            self.num_physical_kvcache_blocks,
+                            num_kv_heads,
+                            self.physical_block_size,
+                            dtype=dtypes.fp32,
+                            device="cuda",
+                        )
+                        self.kv_scale_list.append((k_scale, v_scale))
+                    else:
+                        self.kv_scale_list.append(None)
+        elif self.use_mla:
+            # GLM-5 (glm_moe_dsa): use MHA-style K/V cache for decode (use_mha_decode path)
+            use_mla_mha_decode = getattr(hf_config, "model_type", None) == "glm_moe_dsa"
+            # use_mla_mha_decode = False
+            if use_mla_mha_decode:
+                # MLA uses qk_head_dim (256) for KV cache, not hf_config.head_dim (64)
+                mha_decode_head_dim = getattr(
+                    hf_config, "qk_head_dim", hf_config.head_dim
+                )
+                # Allocate in pa layout (N, num_kv_heads, head_dim, block_size) so binding is view-only (no permute copy)
+                self.kv_cache = torch.zeros(
+                    2,
+                    total_num_layers,
+                    self.num_physical_kvcache_blocks,
+                    num_kv_heads,
+                    mha_decode_head_dim,
+                    self.physical_block_size,
+                    dtype=dtypes.d_dtypes[config.kv_cache_dtype],
+                    device="cuda",
+                )
+                self.kv_scale = torch.zeros(
+                    2,
+                    total_num_layers,
+                    self.num_physical_kvcache_blocks,
+                    num_kv_heads,
+                    self.physical_block_size,
+                    dtype=torch.float32,
+                    device="cuda",
+                )
+            else:
+                self.kv_cache = torch.zeros(
+                    total_num_layers,
+                    self.num_physical_kvcache_blocks,
+                    self.physical_block_size,
+                    576,
+                    dtype=dtypes.d_dtypes[config.kv_cache_dtype],
+                    device="cuda",
+                )
+            if self.is_deepseek_v32:
+                # Align last dimension to 16 bytes for fp8 (1 byte per element)
+                # to avoid unaligned memory access in torch inductor
+                index_dim = hf_config.index_head_dim + 4
+                aligned_index_dim = ((index_dim + 15) // 16) * 16
+                self.index_cache = torch.zeros(
+                    hf_config.num_hidden_layers,
+                    self.num_physical_kvcache_blocks,
+                    self.physical_block_size,
+                    aligned_index_dim,
+                    dtype=dtypes.fp8,
+                    device="cuda",
+                )
         else:
             self.kv_cache = torch.zeros(
                 2,
@@ -1043,20 +1273,25 @@ class ModelRunner:
                 dtype=dtypes.fp32,
                 device="cuda",
             )
-        # Build KVCacheConfig
-        # lirong TODO: This is a simple solution to build KVCacheConfig,
-        # models with only one type of attention, but not support multi-type of attention models.
-        # We need to support it by kv_cache_group in the future.
+        # Build KVCacheConfig and bind KV cache to modules.
 
         # Prepare list of models to bind KV cache
         models_to_bind = [("target", self.model)]
         if self.config.speculative_config and hasattr(self, "drafter"):
             models_to_bind.append(("draft", self.drafter.model))
 
+        use_multi_type = getattr(self, "kv_cache_list", None) is not None
+        if use_multi_type:
+            x = 16 // dtypes.d_dtypes[config.kv_cache_dtype].itemsize
+            mla_head_size = getattr(hf_config, "kv_lora_rank", None) or 576
+        else:
+            x = 16 // self.kv_cache.element_size()
+
         kv_cache_tensors = []
         layer_id = 0
-        x = 16 // self.kv_cache.element_size()
         for model_name, model in models_to_bind:
+            if use_multi_type and model_name != "target":
+                continue  # multi-type: only target model uses kv_cache_list
             logger.info(
                 f"Binding KV cache for {model_name} model starting at layer_id={layer_id}"
             )
@@ -1064,8 +1299,60 @@ class ModelRunner:
             for module in model.modules():
                 # Since use attention base and there are child in attention, add base condition
                 if hasattr(module, "base_attention"):
-                    if hasattr(module, "use_mla") and not module.use_mla:
-                        # Non-MLA attention
+                    if use_multi_type:
+                        # Multi-type attention (e.g. GLM-5 MHA/MLA alternating)
+                        buf = self.kv_cache_list[layer_id]
+                        if not module.use_mla:
+                            k_cache = buf[0].view(
+                                self.num_physical_kvcache_blocks,
+                                num_kv_heads,
+                                hf_config.head_dim // x,
+                                self.physical_block_size,
+                                x,
+                            )
+                            v_cache = buf[1].view(
+                                self.num_physical_kvcache_blocks,
+                                num_kv_heads,
+                                hf_config.head_dim,
+                                self.physical_block_size,
+                            )
+                            module.max_model_len = self.config.max_model_len
+                            scale_tuple = self.kv_scale_list[layer_id]
+                            if scale_tuple is not None:
+                                module.k_scale = scale_tuple[0]
+                                module.v_scale = scale_tuple[1]
+                            k_scale = getattr(module, "k_scale", None)
+                            v_scale = getattr(module, "v_scale", None)
+                            kv_cache_tensor = KVCacheTensor(
+                                layer_num=layer_id,
+                                k_cache=k_cache,
+                                v_cache=v_cache,
+                                k_scale=k_scale,
+                                v_scale=v_scale,
+                            )
+                            kv_cache_tensors.append(kv_cache_tensor)
+                            module.k_cache = k_cache
+                            module.v_cache = v_cache
+                        else:
+                            kv_cache = buf.view(
+                                self.num_physical_kvcache_blocks
+                                * self.physical_block_size,
+                                1,
+                                mla_head_size,
+                            )
+                            module.max_model_len = self.config.max_model_len
+                            kv_cache_tensor = KVCacheTensor(
+                                layer_num=layer_id,
+                                k_cache=kv_cache,
+                                v_cache=None,
+                                k_scale=None,
+                                v_scale=None,
+                            )
+                            kv_cache_tensors.append(kv_cache_tensor)
+                            module.kv_cache = kv_cache
+                        layer_id += 1
+                    elif hasattr(module, "use_mla") and not module.use_mla:
+                        # Non-MLA attention (single-type)
                         if self.is_qwen_next():
                             attn_idx = layer_id // self.full_attention_interval
                         else:
@@ -1106,35 +1393,88 @@ class ModelRunner:
 
                         layer_id += 1
                     elif hasattr(module, "use_mla") and module.use_mla:
-                        # MLA attention
-                        kv_cache = self.kv_cache[layer_id].view(
-                            self.num_physical_kvcache_blocks * self.physical_block_size,
-                            1,
-                            576,
-                        )
-                        module.max_model_len = self.config.max_model_len
-                        if self.is_deepseek_v32 and module.indexer is not None:
-                            # Use aligned dimension to avoid memory copy in torch inductor
-                            module.indexer.k_cache.kv_cache[0] = self.index_cache[
-                                layer_id
-                            ].view(
+                        # MLA attention (single-type)
+                        use_mha_decode = getattr(module.impl, "use_mha_decode", False)
+                        # use_mha_decode = False
+                        if use_mha_decode:
+                            # GLM-5: K/V cache uses qk_head_dim (256)
+                            attn_idx = layer_id
+                            mha_decode_head_dim = getattr(
+                                hf_config, "qk_head_dim", hf_config.head_dim
+                            )
+                            k_cache = self.kv_cache[0, attn_idx].view(
+                                self.num_physical_kvcache_blocks,
+                                num_kv_heads,
+                                mha_decode_head_dim // x,
+                                self.physical_block_size,
+                                x,
+                            )
+                            v_cache = self.kv_cache[1, attn_idx].view(
+                                self.num_physical_kvcache_blocks,
+                                num_kv_heads,
+                                mha_decode_head_dim,
+                                self.physical_block_size,
+                            )
+                            module.max_model_len = self.config.max_model_len
+                            if config.kv_cache_dtype == "fp8":
+                                module.k_scale = self.kv_scale[0, attn_idx]
+                                module.v_scale = self.kv_scale[1, attn_idx]
+                            k_scale = getattr(module, "k_scale", None)
+                            v_scale = getattr(module, "v_scale", None)
+                            kv_cache_tensor = KVCacheTensor(
+                                layer_num=layer_id,
+                                k_cache=k_cache,
+                                v_cache=v_cache,
+                                k_scale=k_scale,
+                                v_scale=v_scale,
+                            )
+                            kv_cache_tensors.append(kv_cache_tensor)
+                            module.k_cache = k_cache
+                            module.v_cache = v_cache
+                            if self.is_deepseek_v32 and module.indexer is not None:
+                                idx_dim = hf_config.index_head_dim + 4
+                                idx_aligned = ((idx_dim + 15) // 16) * 16
+                                idx_layer = self.index_cache[layer_id]
+                                idx_numel = idx_layer.numel()
+                                if idx_numel % idx_aligned == 0:
+                                    module.indexer.k_cache.kv_cache[0] = idx_layer.view(
+                                        idx_numel // idx_aligned, 1, idx_aligned
+                                    )
+                        else:
+                            kv_cache = self.kv_cache[layer_id].view(
                                 self.num_physical_kvcache_blocks
                                 * self.physical_block_size,
                                 1,
-                                aligned_index_dim,
+                                576,
                             )
-                        # Store in KVCacheTensor
-                        kv_cache_tensor = KVCacheTensor(
-                            layer_num=layer_id,
-                            k_cache=kv_cache,
-                            v_cache=None,
-                            k_scale=None,
-                            v_scale=None,
-                        )
-                        kv_cache_tensors.append(kv_cache_tensor)
+                            module.max_model_len = self.config.max_model_len
+                            if self.is_deepseek_v32 and module.indexer is not None:
+                                # Use aligned dimension to avoid memory copy in torch inductor
+                                # Use actual tensor size for view (same as kv_cache)
+                                idx_dim = hf_config.index_head_dim + 4
+                                idx_aligned = ((idx_dim + 15) // 16) * 16
+                                idx_layer = self.index_cache[layer_id]
+                                idx_numel = idx_layer.numel()
+                                if idx_numel % idx_aligned != 0:
+                                    raise RuntimeError(
+                                        f"Index cache layer {layer_id} numel {idx_numel} "
+                                        f"not divisible by {idx_aligned}"
+                                    )
+                                module.indexer.k_cache.kv_cache[0] = idx_layer.view(
+                                    idx_numel // idx_aligned, 1, idx_aligned
+                                )
+                            # Store in KVCacheTensor
+                            kv_cache_tensor = KVCacheTensor(
+                                layer_num=layer_id,
+                                k_cache=kv_cache,
+                                v_cache=None,
+                                k_scale=None,
+                                v_scale=None,
+                            )
+                            kv_cache_tensors.append(kv_cache_tensor)
 
-                        module.kv_cache = kv_cache
-                        module.max_model_len = self.config.max_model_len
+                            module.kv_cache = kv_cache
+                            module.max_model_len = self.config.max_model_len
                         layer_id += 1
                 elif hasattr(module, "base_linear_attention"):
                     gdn_idx = (
@@ -1249,7 +1589,22 @@ class ModelRunner:
             self.forward_vars["cu_seqlens_q"].np[scheduled_bs + 1 : bs + 1] = (
                 self.forward_vars["cu_seqlens_q"].np[scheduled_bs]
             )
-        attn_metadata, positions = self.attn_metadata_builder.build(batch, bs)
+        if self.attn_groups:
+            # Multi-type: build per-group metadata and pass dict keyed by layer_id
+            attn_metadata_dict = {}
+            positions = None
+            for group in self.attn_groups:
+                meta, positions = group.metadata_builder.build(batch, bs)
+                for layer_id in group.layer_ids:
+                    attn_metadata_dict[f"layer_{layer_id}"] = meta
+            attn_metadata = attn_metadata_dict
+        else:
+            attn_metadata, positions = self.attn_metadata_builder.build(batch, bs)
+        # Single-type (e.g. DeepSeek) must never receive dict metadata
+        if self.is_deepseek_mla():
+            assert not isinstance(
+                attn_metadata, dict
+            ), "DeepSeek must use single attn_metadata (attn_groups should be empty)"
         context_bs = batch.total_seqs_num_prefill if is_prefill else scheduled_bs
 
         # graph_bs should be batch size (number of sequences), not token count
@@ -1311,7 +1666,12 @@ class ModelRunner:
             hidden_states = self.model(input_ids, positions)
         else:
             graph_bs = context.graph_bs
-            max_q_len = forward_context.attn_metadata.max_seqlen_q
+            meta = (
+                get_attn_metadata_for_layer(forward_context, 0)
+                if isinstance(forward_context.attn_metadata, dict)
+                else forward_context.attn_metadata
+            )
+            max_q_len = meta.max_seqlen_q
             graph_key = (graph_bs, max_q_len)
             self.graphs[graph_key].replay()
             num_tokens = context.batch_size * max_q_len
@@ -1373,8 +1733,9 @@ class ModelRunner:
         draft_token_ids: Optional[np.ndarray] = None
         if self.tokenID_processor.is_deferred_out:
             prev_rejected_num = self.tokenID_processor.prev_rejected_num
-            self.tokenID_processor.send_rejected_to_cpu_async(
-                num_reject_tokens
+            prev_bonus_num = self.tokenID_processor.prev_bonus_num
+            self.tokenID_processor.send_mtp_status_to_cpu_async(
+                num_reject_tokens, next_token_locs
             )  # Async copy to CPU
             if hasattr(self, "drafter"):
                 next_token_ids = torch.gather(
@@ -1393,12 +1754,14 @@ class ModelRunner:
                 # self.debug(f"{num_bonus_tokens=}")
         else:
             prev_rejected_num = np.zeros(batch.total_seqs_num, dtype=np.int32)
+            prev_bonus_num = np.zeros(batch.total_seqs_num, dtype=np.int32)
 
         return ScheduledBatchOutput(
             token_ids=token_ids,
             draft_token_ids=draft_token_ids,
             is_deferred_out=self.tokenID_processor.is_deferred_out,
             num_rejected=prev_rejected_num,
+            num_bonus=prev_bonus_num,
         )
 
     @torch.inference_mode()
@@ -1494,9 +1857,26 @@ class ModelRunner:
                     np.arange(num_tokens, dtype=np.int64) % max_q_len
                 )
 
-                attn_metadata, context = (
-                    self.attn_metadata_builder.build_for_cudagraph_capture(bs)
-                )
+                if self.attn_groups:
+                    attn_metadata_dict = {}
+                    context = None
+                    for group in self.attn_groups:
+                        meta, ctx = (
+                            group.metadata_builder.build_for_cudagraph_capture(
+                                bs
+                            )
+                        )
+                        if context is None:
+                            context = ctx
+                        for layer_id in group.layer_ids:
+                            attn_metadata_dict[f"layer_{layer_id}"] = meta
+                    attn_metadata = attn_metadata_dict
+                else:
+                    attn_metadata, context = (
+                        self.attn_metadata_builder.build_for_cudagraph_capture(
+                            bs
+                        )
+                    )
                 num_pad, num_tokens_across_dp = self.get_dp_padding(num_tokens)
                 num_tokens += num_pad
                 set_forward_context(

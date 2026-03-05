@@ -8,7 +8,11 @@ from aiter.dist.parallel_state import get_tp_group
 from aiter.tuned_gemm import tgemm
 from torch import nn
 
-from atom.utils.forward_context import ForwardContext, get_forward_context
+from atom.utils.forward_context import (
+    ForwardContext,
+    get_attn_metadata_for_layer,
+    get_forward_context,
+)
 
 
 class VocabParallelEmbedding(nn.Module):
@@ -70,7 +74,11 @@ class ParallelLMHead(VocabParallelEmbedding):
     def forward(self, x: torch.Tensor):
         forward_context: ForwardContext = get_forward_context()
         context = forward_context.context
-        attn_metadata = forward_context.attn_metadata
+        attn_metadata = (
+            get_attn_metadata_for_layer(forward_context, 0)
+            if isinstance(forward_context.attn_metadata, dict)
+            else forward_context.attn_metadata
+        )
         # context = get_context()
         if context.is_prefill and not context.is_draft:
             last_indices = attn_metadata.cu_seqlens_q[1:] - 1

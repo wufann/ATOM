@@ -25,7 +25,7 @@
 
 import logging
 from typing import Optional, Tuple, Union
-
+from aiter.dist.parallel_state import get_tp_group
 import torch
 from aiter import (
     QuantType,
@@ -1328,9 +1328,26 @@ class DeepseekV2MLAAttention(nn.Module):
         )
 
         rope_params = config.rope_parameters
-        rope_params["rope_type"] = "deepseek_yarn"
-        rope_theta = rope_params["rope_theta"]
-        rope_scaling = rope_params
+        rope_theta = rope_params.get("rope_theta") or 10000
+        # Only use YaRN scaling when config has it (e.g. DeepSeek with factor/type "yarn").
+        # GLM-5 has no rope_scaling in config -> use default RoPE (no scaling).
+        use_yarn = (
+            rope_params.get("factor", 1.0) not in (1.0, None)
+            or rope_params.get("type") in ("yarn", "deepseek_yarn")
+            or rope_params.get("rope_type") in ("yarn", "deepseek_yarn")
+        )
+        if use_yarn:
+            rope_scaling = dict(rope_params)
+            rope_scaling["rope_type"] = "deepseek_yarn"
+            if "original_max_position_embeddings" not in rope_scaling:
+                factor = float(rope_scaling.get("factor", 1.0))
+                rope_scaling["original_max_position_embeddings"] = (
+                    int(max_position_embeddings / factor)
+                    if factor > 0
+                    else max_position_embeddings
+                )
+        else:
+            rope_scaling = None
         self.rotary_emb = get_rope(
             qk_rope_head_dim,
             rotary_dim=qk_rope_head_dim,
@@ -1339,9 +1356,9 @@ class DeepseekV2MLAAttention(nn.Module):
             rope_scaling=rope_scaling,
             is_neox_style=False,
         )
-        if rope_params:
-            mscale_all_dim = rope_params.get("mscale_all_dim", False)
-            scaling_factor = rope_params["factor"]
+        if rope_scaling:
+            mscale_all_dim = rope_scaling.get("mscale_all_dim", False)
+            scaling_factor = rope_scaling["factor"]
             mscale = yarn_get_mscale(scaling_factor, float(mscale_all_dim))
             self.scaling = self.scaling * mscale * mscale
 
@@ -1389,6 +1406,9 @@ class DeepseekV2MLAAttention(nn.Module):
             o_proj=self.o_proj,
             indexer=self.indexer,
         )
+        self.sinks = torch.nn.Parameter(
+            torch.empty(config.num_attention_heads // get_tensor_model_parallel_world_size(), requires_grad=False)
+        )
 
         self.mla_attn = Attention(
             num_heads=self.num_local_heads,
@@ -1398,6 +1418,7 @@ class DeepseekV2MLAAttention(nn.Module):
             kv_cache_dtype=cache_config,
             layer_num=layer_num,
             use_mla=True,
+            sinks=self.sinks,
             mla_modules=mla_modules,
             prefix=prefix,
         )
@@ -1666,11 +1687,15 @@ class DeepseekV2DecoderLayer(nn.Module):
                 hidden_states = self.input_layernorm(hidden_states)
             else:
                 hidden_states, residual = self.input_layernorm(hidden_states, residual)
+        # if get_tp_group().rank == 0:
+        #     print("before self.self_attn:", hidden_states)
 
         hidden_states = self.self_attn(
             positions=positions,
             hidden_states=hidden_states,
         )
+        # if get_tp_group().rank == 0:
+        #     print("after self.self_attn:", hidden_states)
 
         if hidden_states.dtype == torch.float16:
             # Fix FP16 overflow
@@ -1870,6 +1895,9 @@ class DeepseekV2ForCausalLM(nn.Module):
         intermediate_tensors: Optional[IntermediateTensors] = None,
         inputs_embeds: Optional[torch.Tensor] = None,
     ) -> Union[torch.Tensor, IntermediateTensors]:
+        # if get_tp_group().rank == 0:
+        #     print("input ids:", input_ids)
+
         hidden_states = self.model(
             input_ids, positions, intermediate_tensors, inputs_embeds
         )
@@ -1901,4 +1929,10 @@ class DeepseekV2ForCausalLM(nn.Module):
 
 
 class DeepseekV3ForCausalLM(DeepseekV2ForCausalLM):
+    pass
+
+
+class GlmMoeDsaForCausalLM(DeepseekV2ForCausalLM):
+    """GLM 5.0 MoE (structurally similar to DeepSeek v3.2). Reuses DeepseekV2 implementation."""
+
     pass

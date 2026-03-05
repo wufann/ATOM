@@ -7,6 +7,7 @@ from functools import partial as functools_partial
 from typing import Optional
 
 import torch
+import aiter
 from aiter import (
     QuantType,
     concat_and_cache_mla,
@@ -17,6 +18,7 @@ from aiter import (
 )
 from aiter.dist.parallel_state import get_dp_group
 from aiter.mla import mla_decode_fwd, mla_prefill_fwd
+from aiter.ops.triton.gluon.pa_decode_gluon import get_recommended_splits
 from atom.config import get_current_atom_config
 from atom.model_ops.linear import use_triton_gemm
 from atom.model_ops.utils import get_and_maybe_dequant_weights
@@ -24,6 +26,7 @@ from atom.utils import envs
 from atom.utils.forward_context import (
     AttentionMetaData,
     ForwardContext,
+    get_attn_metadata_for_layer,
     get_forward_context,
 )
 from torch import nn
@@ -100,6 +103,7 @@ class MLAAttention(nn.Module):
         layer_num: int = 0,
         mla_modules: MLAModules = None,
         dtype: torch.dtype = torch.bfloat16,
+        sinks: Optional[nn.Parameter] = None,
         **kwargs,
     ) -> None:
         super().__init__()
@@ -109,6 +113,10 @@ class MLAAttention(nn.Module):
         self.num_kv_heads = num_kv_heads
         self.kv_cache_dtype = kv_cache_dtype if kv_cache_dtype == "fp8" else "auto"
         self.dtype = dtype
+        config = get_current_atom_config()
+        self.use_mha_decode = config.hf_config.model_type == "glm_moe_dsa"
+        # self.use_mha_decode = False
+        self.sinks = sinks
 
         self.q_lora_rank = mla_modules.q_lora_rank
         self.kv_lora_rank = mla_modules.kv_lora_rank
@@ -554,6 +562,144 @@ class MLAAttention(nn.Module):
 
         return self._v_up_proj_and_o_proj(o)
 
+    def _forward_decode_mha(
+        self,
+        q: torch.Tensor,
+        k: torch.Tensor,
+        v: torch.Tensor,
+        attn_metadata: AttentionMetaData,
+    ) -> torch.Tensor:
+        """Decode path using MHA (e.g. for GLM-5 when mla_decode kernel is unsupported). Uses paged_attention_triton (pa_decode_gluon)."""
+        forward_context = get_forward_context()
+        kv_cache_data = forward_context.kv_cache_data
+        layer_cache = kv_cache_data[f"layer_{self.layer_num}"]
+        k_cache = layer_cache.k_cache
+        v_cache = layer_cache.v_cache
+        k_scale = getattr(layer_cache, "k_scale", None)
+        v_scale = getattr(layer_cache, "v_scale", None)
+        if k_scale is None:
+            k_scale = self.one_scale
+        if v_scale is None:
+            v_scale = self.one_scale
+
+        if self.kv_cache_dtype == "fp8":
+            aiter.reshape_and_cache_with_pertoken_quant(
+                k,
+                v,
+                k_cache,
+                v_cache,
+                k_scale,
+                v_scale,
+                attn_metadata.slot_mapping,
+                asm_layout=False,
+            )
+        else:
+            aiter.reshape_and_cache(
+                k,
+                v,
+                k_cache,
+                v_cache,
+                attn_metadata.slot_mapping,
+                kv_cache_dtype="auto",
+                k_scale=None,
+                v_scale=None,
+                asm_layout=False,
+            )
+
+        o = torch.empty_like(q)
+        num_seqs, num_q_heads_total, head_size = q.shape
+        num_blocks, num_kv_heads, _, block_size, _ = k_cache.shape
+        query_group_size = num_q_heads_total // num_kv_heads
+        assert num_q_heads_total % num_kv_heads == 0
+
+        max_context_partition_num = get_recommended_splits(num_seqs, num_kv_heads)
+        context_partition_size = 256
+        sliding_window = getattr(self, "sliding_window", -1)
+        if sliding_window > 0:
+            max_context_partition_num = 1
+            context_partition_size = 128
+
+        intermediate_shape = (
+            num_seqs,
+            num_kv_heads,
+            max_context_partition_num,
+            query_group_size,
+        )
+        exp_sums = torch.empty(intermediate_shape, dtype=torch.float32, device=q.device)
+        max_logits = torch.empty(
+            intermediate_shape, dtype=torch.float32, device=q.device
+        )
+        temporary_output = torch.empty(
+            *intermediate_shape,
+            head_size,
+            dtype=q.dtype,
+            device=q.device,
+        )
+
+        if k_scale is not None and k_scale.numel() > 1:
+            k_scale = k_scale.unsqueeze(-1)
+            v_scale = v_scale.unsqueeze(-1)
+
+        compute_type = (
+            torch.bfloat16
+            if self.kv_cache_dtype == "bf16" or self.kv_cache_dtype == "auto"
+            else aiter.dtypes.fp8
+        )
+        # q = torch.randn_like(q)
+        # k_cache = torch.randn_like(k_cache)
+        # v_cache = torch.randn_like(v_cache)
+
+        torch.ops.aiter.pa_decode_gluon(
+            o,
+            q,
+            k_cache,
+            v_cache,
+            attn_metadata.context_lens,
+            attn_metadata.block_tables,
+            self.scale,
+            attn_metadata.max_seqlen_q,
+            max_context_partition_num,
+            context_partition_size,
+            compute_type,
+            None,  # q_scale
+            None if self.kv_cache_dtype == "bf16" else k_scale,
+            None if self.kv_cache_dtype == "bf16" else v_scale,
+            exp_sums=exp_sums,
+            max_logits=max_logits,
+            temporary_output=temporary_output,
+            alibi_slopes=None,
+            sinks=self.sinks,
+            sliding_window=sliding_window,
+            ps=True,
+        )
+        # from aiter.dist.parallel_state import get_tp_group
+        # if get_tp_group().rank == 0:
+        #     # print("output of pa_decode_gluon:", o)
+        #     print(f"q.shape: {q.shape}")
+        #     print(f"k_cache.shape: {k_cache.shape}")
+        #     print(f"v_cache.shape: {v_cache.shape}")
+        #     print(f"attn_metadata.context_lens: {attn_metadata.context_lens}")
+        #     print(f"attn_metadata.block_tables.shape: {attn_metadata.block_tables.shape}")
+
+        #     print(f"o.shape: {o.shape}")
+
+        return self.o_proj(o.view(o.shape[0], -1))
+
+    def _compute_kv_from_knope_krope(
+        self, kv_c_normed: torch.Tensor, k_rope: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Compute full k, v from k_nope (kv_c_normed) and k_rope for MHA cache."""
+        if k_rope.dim() == 2:
+            k_rope = k_rope.unsqueeze(1)
+        kv_nope = self.kv_b_proj(kv_c_normed).view(
+            -1, self.num_heads, self.qk_nope_head_dim + self.v_head_dim
+        )  # got k_nope + v from kv_c_normed
+        k_nope, v = kv_nope.split(
+            [self.qk_nope_head_dim, self.v_head_dim], dim=-1
+        )
+        k = torch.cat((k_nope, k_rope.expand((*k_nope.shape[:-1], -1))), dim=-1)
+        return k, v
+
     def forward(
         self,
         q: torch.Tensor,  # query in unified attn
@@ -565,7 +711,12 @@ class MLAAttention(nn.Module):
     ) -> torch.Tensor:
         # kv_cache = self.kv_cache
         forward_context: ForwardContext = get_forward_context()
-        attn_metadata = forward_context.attn_metadata
+        if isinstance(forward_context.attn_metadata, dict):
+            attn_metadata = get_attn_metadata_for_layer(
+                forward_context, self.layer_num
+            )
+        else:
+            attn_metadata = forward_context.attn_metadata
         context = forward_context.context
         use_prefill_mla = (
             self.topk_indices_buffer is not None
@@ -573,9 +724,9 @@ class MLAAttention(nn.Module):
         )
         if forward_context.context.is_dummy_run:
             # dummy run: skip real attention and return
-            output_shape = list(q.shape)
-            output_shape[-1] = 7168
             atom_config = get_current_atom_config()
+            output_shape = list(q.shape)
+            output_shape[-1] = atom_config.hf_config.hidden_size
             output_dtype = atom_config.torch_dtype
             output = torch.empty(output_shape, dtype=output_dtype, device=q.device)
             return output
@@ -589,7 +740,38 @@ class MLAAttention(nn.Module):
             prefill_q_pe = prefill_q[..., self.qk_nope_head_dim :]
             self.rotary_emb(positions, prefill_q_pe, k_rope)
 
-            if kv_cache.numel() > 0:
+            if self.use_mha_decode:
+                k, v = self._compute_kv_from_knope_krope(k_nope, k_rope)
+                layer_cache = kv_cache_data[f"layer_{self.layer_num}"]
+                k_cache = layer_cache.k_cache
+                v_cache = layer_cache.v_cache
+                k_scale = layer_cache.k_scale
+                v_scale = layer_cache.v_scale
+                if self.kv_cache_dtype == "fp8":
+                    aiter.reshape_and_cache_with_pertoken_quant(
+                        k,
+                        v,
+                        k_cache,
+                        v_cache,
+                        k_scale,
+                        v_scale,
+                        attn_metadata.slot_mapping,
+                        asm_layout=True,  # use triton attention
+                    )
+                else:
+                    aiter.reshape_and_cache(
+                        k,
+                        v,
+                        k_cache,
+                        v_cache,
+                        attn_metadata.slot_mapping,
+                        kv_cache_dtype="auto",
+                        k_scale=None,
+                        v_scale=None,
+                        asm_layout=True,
+                    )
+
+            elif kv_cache.numel() > 0:
                 concat_and_cache_mla(
                     k_nope,
                     k_rope.squeeze(1),
@@ -602,6 +784,36 @@ class MLAAttention(nn.Module):
             output = self._forward_prefill_mha(
                 prefill_q, k_nope, k_rope, kv_cache, attn_metadata
             )
+        elif self.use_mha_decode and not context.is_prefill:
+            # prefill_q = self.q_proj(q, x_scale=q_scale).view(
+            #     -1, self.num_heads, self.qk_head_dim
+            # )
+            # prefill_q_pe = prefill_q[..., self.qk_nope_head_dim :]
+            # self.rotary_emb(positions, prefill_q_pe, k_rope)
+
+            q_nope, q_rope = self._q_proj_and_k_up_proj(q, x_scale=q_scale)
+            self.rotary_emb(positions, q_rope, k_rope)
+            q_nope_bt = q_nope.transpose(0, 1).to(q_rope.dtype)
+            if q_nope_bt.size(0) != q_rope.size(0):
+                q_nope_bt = q_nope_bt.transpose(0, 1)
+            n_heads = max(q_nope_bt.size(1), q_rope.size(1))
+            if q_nope_bt.size(1) != n_heads:
+                q_nope_bt = q_nope_bt.repeat_interleave(
+                    n_heads // q_nope_bt.size(1), dim=1
+                )
+            if q_rope.size(1) != n_heads:
+                q_rope = q_rope.repeat_interleave(
+                    n_heads // q_rope.size(1), dim=1
+                )
+            # Reduce q_nope 512 -> qk_nope_head_dim (192), then concat with q_rope (64) -> (bs, 8, qk_head_dim)
+            q_nope_reduced = q_nope_bt[:, :, : self.qk_nope_head_dim]
+            q_for_mha = torch.cat([q_nope_reduced, q_rope], dim=-1)
+            # print("q_for_mha", q_for_mha.shape)
+            # print("q_rope", q_rope.shape)
+            # print("q_out", q_out.shape)
+            # print("prefill_q_pe", prefill_q_pe.shape)
+            k, v = self._compute_kv_from_knope_krope(k_nope, k_rope)
+            output = self._forward_decode_mha(q_for_mha, k, v, attn_metadata)
         else:
             q_nope, q_rope = self._q_proj_and_k_up_proj(q, x_scale=q_scale)
 
@@ -640,6 +852,7 @@ class MLAAttention(nn.Module):
             if context.is_prefill:
                 output = self._forward_prefill_mla(q_out, kv_cache, attn_metadata)
             else:
+                print("q_out", q_out.shape)
                 output = self._forward_decode(q_out, kv_cache, attn_metadata)
 
         return output
