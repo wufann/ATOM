@@ -315,7 +315,10 @@ class LinearBase(nn.Module):
         ):
             param.data = param.data.view(loaded_weight.dtype)
         loaded_weight = post_process_func(loaded_weight)
-        if loaded_weight.shape != param.data.shape and loaded_weight.numel() == param.data.numel():
+        if (
+            loaded_weight.shape != param.data.shape
+            and loaded_weight.numel() == param.data.numel()
+        ):
             loaded_weight = loaded_weight.reshape(param.data.shape)
         param.data.copy_(loaded_weight)
 
