@@ -1984,6 +1984,13 @@ class FusedMoE(torch.nn.Module):
         ):
             # Use CompressedTensorsFp8MoEMethod for compressed-tensors format
             self.quant_method = CompressedTensorsFp8MoEMethod(quant_config, moe)
+        elif (
+            quant_config["quant_dtype"] == dtypes.fp8
+            and quant_config["quant_type"] == QuantType.per_Token
+        ):
+            # Per-channel FP8 (e.g., Quark per_Token override for MTP layers)
+            # needs CompressedTensors-style weight scale handling
+            self.quant_method = CompressedTensorsFp8MoEMethod(quant_config, moe)
         elif quant_config["quant_dtype"] == dtypes.fp8:
             self.quant_method = Fp8MoEMethod(quant_config, moe)
         elif quant_config["quant_dtype"] == dtypes.fp4x2:
@@ -2100,6 +2107,10 @@ class FusedMoE(torch.nn.Module):
         tp_rank: int,
     ):
         # for per channel weight quantization
+        # When scales are stored as [N,1] (CompressedTensors per-channel)
+        # but loaded from checkpoint as [N], reshape to match.
+        if loaded_weight.dim() == 1 and expert_data.dim() == 2:
+            loaded_weight = loaded_weight.unsqueeze(-1)
         if shard_id == "w2":
             expert_data.copy_(loaded_weight)
         elif shard_id in ("w1", "w3"):
