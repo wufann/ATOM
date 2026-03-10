@@ -24,7 +24,7 @@ jobs:
         run: |
           INPUT="${{ inputs.runners || 'all' }}"
           if [ "$INPUT" = "all" ]; then
-            MATRIX='[{"runner":"atom-mi355-8gpu.predownload","label":"MI355-8GPU"}]'
+            MATRIX='[{"runner":"mia1-p01-g33","label":"mia1-p01-g33"},{"runner":"mia1-p01-g34","label":"mia1-p01-g34"},{"runner":"mia1-p01-g40","label":"mia1-p01-g40"},{"runner":"mia1-p01-g42","label":"mia1-p01-g42"},{"runner":"mia1-p01-g45","label":"mia1-p01-g45"},{"runner":"mia1-p01-g64","label":"mia1-p01-g64"}]'
           else
             MATRIX="["
             SEP=""
