@@ -1263,7 +1263,7 @@ class DeepseekV2MLAAttention(nn.Module):
         else:
             source_quant_dtype = None
             # Check exclude patterns (e.g. W4A8 checkpoints exclude attention)
-            if should_ignore_layer(quant_config, prefix):
+            if quant_config is not None and quant_config.should_ignore_layer_quant(prefix):
                 quant_config = None
                 base_quant_config = None
             else:

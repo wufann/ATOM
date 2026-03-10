@@ -522,7 +522,7 @@ class QuantizationConfig:
             packed_modules_mapping if packed_modules_mapping is not None else {}
         )
         # for special models
-        if model_type == "deepseek_mtp" or model_type == "deepseek_v3":
+        if model_type in ("deepseek_mtp", "deepseek_v3", "kimi_k2"):
             if hasattr(hf_config, "q_lora_rank") and hf_config.q_lora_rank is not None:
                 self.packed_modules_mapping = {
                     "q_a_proj": ("fused_qkv_a_proj", 0),
