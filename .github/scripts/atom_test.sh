@@ -75,6 +75,7 @@ if [ "$TYPE" == "benchmark" ]; then
     --max-concurrency=$CONC \
     --num-prompts=$(( $CONC * 10 )) \
     --trust-remote-code \
+    --num-warmups=$CONC \
     --request-rate=inf --ignore-eos \
     --save-result --percentile-metrics="ttft,tpot,itl,e2el" \
     --result-dir=. --result-filename=${RESULT_FILENAME}.json
