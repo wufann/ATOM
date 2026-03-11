@@ -6,11 +6,26 @@ Plugin mode extensions for PagedAttentionImpl.
 This module provides additional methods for PagedAttentionImpl when running in plugin mode.
 """
 
+import os
 import torch
 import aiter
-from aiter import dtypes, fused_qk_norm_rope_cache_quant_shuffle
-from aiter.ops.triton.fused_kv_cache import fused_qk_rope_reshape_and_cache
-from aiter.ops.triton.gluon.pa_decode_gluon import get_recommended_splits
+from aiter import dtypes
+
+# Optional import for fused_qk_norm_rope_cache_quant_shuffle (may not be available in older aiter versions)
+try:
+    from aiter import fused_qk_norm_rope_cache_quant_shuffle
+except ImportError:
+    fused_qk_norm_rope_cache_quant_shuffle = None
+# Optional imports (may not be available in older aiter versions)
+try:
+    from aiter.ops.triton.fused_kv_cache import fused_qk_rope_reshape_and_cache
+except ImportError:
+    fused_qk_rope_reshape_and_cache = None
+
+try:
+    from aiter.ops.triton.gluon.pa_decode_gluon import get_recommended_splits
+except ImportError:
+    get_recommended_splits = None
 from typing import TYPE_CHECKING, Optional
 from atom.utils import envs
 from atom.model_ops.base_attention import cp_mha_gather_cache
@@ -99,7 +114,11 @@ class PagedAttentionImplPluginModeMethods:
 
         attn_metadata = attention_metadata
 
-        use_triton_attn = self.sliding_window != -1 or self.head_dim != 128
+        # Use ASM decode when ATOM_USE_TRITON_DECODE=0 (e.g. no ROCm Triton gluon.language.amd)
+        use_triton_decode = os.environ.get("ATOM_USE_TRITON_DECODE", "1") != "0"
+        use_triton_attn = use_triton_decode and (
+            self.sliding_window != -1 or self.head_dim != 128
+        )
         self.use_triton_attn = use_triton_attn
 
         if (

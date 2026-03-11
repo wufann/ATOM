@@ -67,6 +67,21 @@ pip install amd-aiter
 git clone https://github.com/ROCm/ATOM.git; pip install ./ATOM
 ```
 
+**Using a local AITER clone:** If AITER is used from a local clone (e.g. ATOM in `/dockerx/ATOM` and AITER in `/dockerx/aiter`), set `PYTHONPATH` so the local AITER is used and the correct symbols are available:
+
+```bash
+export PYTHONPATH=/dockerx/aiter${PYTHONPATH:+:$PYTHONPATH}
+```
+
+Then from the ATOM directory you can verify ATOM health with:
+
+```bash
+cd /dockerx/ATOM
+python -m atom.examples.simple_inference --model /data/hf_hub_cache/models--amd--Llama-3.1-8B-Instruct-FP8-KV/snapshots/fa42f9a9105c545755fea25cf69f49ac8c8b40e1
+```
+
+(Adjust the `--model` path and the `/dockerx/aiter` path if your layout differs.)
+
 ## 📚 Documentation
 
 **Full documentation: [rocm.github.io/ATOM](https://rocm.github.io/ATOM)**

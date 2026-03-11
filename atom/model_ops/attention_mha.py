@@ -1,14 +1,31 @@
 # SPDX-License-Identifier: MIT
 # Copyright (C) 2024-2025, Advanced Micro Devices, Inc. All rights reserved.
 
+import os
 from typing import Optional
 
 import aiter
 import torch
-from aiter import fused_qk_norm_rope_cache_quant_shuffle
-from aiter.ops.triton.fused_kv_cache import fused_qk_rope_reshape_and_cache
-from aiter.ops.triton.gluon.pa_decode_gluon import get_recommended_splits
-from aiter.ops.triton.unified_attention import unified_attention
+# Optional import for fused_qk_norm_rope_cache_quant_shuffle (may not be available in older aiter versions)
+try:
+    from aiter import fused_qk_norm_rope_cache_quant_shuffle
+except ImportError:
+    fused_qk_norm_rope_cache_quant_shuffle = None
+# Optional imports (may not be available in older aiter versions)
+try:
+    from aiter.ops.triton.fused_kv_cache import fused_qk_rope_reshape_and_cache
+except ImportError:
+    fused_qk_rope_reshape_and_cache = None
+
+try:
+    from aiter.ops.triton.gluon.pa_decode_gluon import get_recommended_splits
+except ImportError:
+    get_recommended_splits = None
+
+try:
+    from aiter.ops.triton.unified_attention import unified_attention
+except ImportError:
+    unified_attention = None
 from atom.config import get_current_atom_config
 from atom.utils.forward_context import ForwardContext, get_forward_context
 from torch import nn
@@ -119,7 +136,11 @@ class PagedAttentionImpl(nn.Module):
         k_scale = kv_cache_data[f"layer_{self.layer_num}"].k_scale
         v_scale = kv_cache_data[f"layer_{self.layer_num}"].v_scale
 
-        use_triton_attn = self.sliding_window != -1 or self.head_dim != 128
+        # Use ASM decode when ATOM_USE_TRITON_DECODE=0 (e.g. no ROCm Triton gluon.language.amd)
+        use_triton_decode = os.environ.get("ATOM_USE_TRITON_DECODE", "1") != "0"
+        use_triton_attn = use_triton_decode and (
+            self.sliding_window != -1 or self.head_dim != 128
+        )
         self.use_triton_attn = use_triton_attn
 
         if (
@@ -127,6 +148,12 @@ class PagedAttentionImpl(nn.Module):
             and self.q_norm is not None
             and self.k_norm is not None
         ):
+            if fused_qk_norm_rope_cache_quant_shuffle is None:
+                raise ImportError(
+                    "fused_qk_norm_rope_cache_quant_shuffle is not available in the installed "
+                    "version of aiter. Please update amd-aiter to a version that includes "
+                    "this function."
+                )
             fused_qk_norm_rope_cache_quant_shuffle(
                 qkv,
                 num_heads_q=self.num_heads,

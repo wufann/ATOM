@@ -14,9 +14,14 @@ from aiter import (
     concat_and_cache_mla,
     dtypes,
     flash_attn_varlen_func,
-    fused_qk_rope_concat_and_cache_mla,
     get_hip_quant,
 )
+
+# Optional import for fused_qk_rope_concat_and_cache_mla (may not be available in older aiter versions)
+try:
+    from aiter import fused_qk_rope_concat_and_cache_mla
+except ImportError:
+    fused_qk_rope_concat_and_cache_mla = None
 from aiter.dist.parallel_state import get_dp_group
 from aiter.mla import mla_decode_fwd, mla_prefill_fwd
 from atom.config import get_current_atom_config
@@ -63,7 +68,11 @@ def is_rocm_aiter_fp4bmm_enabled() -> bool:
 
 if is_rocm_aiter_fp4bmm_enabled():
     # from aiter.ops.triton.batched_gemm_afp4wfp4_pre_quant import  batched_gemm_afp4wfp4_pre_quant
-    from aiter.ops.triton.batched_gemm_a16wfp4 import batched_gemm_a16wfp4
+    # Optional import for batched_gemm_a16wfp4 (may not be available in older aiter versions)
+    try:
+        from aiter.ops.triton.batched_gemm_a16wfp4 import batched_gemm_a16wfp4
+    except ImportError:
+        batched_gemm_a16wfp4 = None
     from atom.model_ops.utils import quark_post_load_weights
 
 
@@ -194,6 +203,11 @@ class MLAAttention(nn.Module):
                 device=x.device,
                 dtype=torch.bfloat16,
             )
+            if batched_gemm_a16wfp4 is None:
+                raise ImportError(
+                    "batched_gemm_a16wfp4 is not available in the installed version of aiter. "
+                    "Please update amd-aiter or disable FP4 BMM."
+                )
             output = batched_gemm_a16wfp4(
                 x,
                 self.W_V,
@@ -225,6 +239,11 @@ class MLAAttention(nn.Module):
         q_nope = q_nope.transpose(0, 1)
 
         if is_rocm_aiter_fp4bmm_enabled():
+            if batched_gemm_a16wfp4 is None:
+                raise ImportError(
+                    "batched_gemm_a16wfp4 is not available in the installed version of aiter. "
+                    "Please update amd-aiter or disable FP4 BMM."
+                )
             # FP4 BMM: (N, B, P) x (N, P, L) -> (N, B, L)
             ql_nope = batched_gemm_a16wfp4(
                 q_nope,
@@ -622,6 +641,12 @@ class MLAAttention(nn.Module):
                 device=q_nope.device,
             )
             if kv_cache.numel() > 0:
+                if fused_qk_rope_concat_and_cache_mla is None:
+                    raise ImportError(
+                        "fused_qk_rope_concat_and_cache_mla is not available in the installed "
+                        "version of aiter. Please update amd-aiter to a version that includes "
+                        "this function, or use a model that doesn't require MLA attention."
+                    )
                 fused_qk_rope_concat_and_cache_mla(
                     q_nope,
                     q_rope,

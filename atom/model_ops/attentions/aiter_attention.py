@@ -24,6 +24,27 @@ from atom.plugin.prepare import is_plugin_mode
 from atom.plugin.attention import AiterAttentionMetadataBuilderDecoratorForPluginMode
 from atom.plugin.attention import AiterBackendDecoratorForPluginMode
 
+# Resolve aiter paged-attention API (name/module may differ across aiter versions)
+def _resolve_pa_api(name_v1: str, name_legacy: str):
+    fn = getattr(aiter, name_v1, None) or getattr(aiter, name_legacy, None)
+    if fn is not None:
+        return fn
+    for sub in ("paged_attention", "attention", "pa"):
+        sm = getattr(aiter, sub, None)
+        if sm is not None and hasattr(sm, name_v1):
+            return getattr(sm, name_v1)
+        if sm is not None and hasattr(sm, name_legacy):
+            return getattr(sm, name_legacy)
+    return None
+
+
+_get_pa_metadata_info = _resolve_pa_api("get_pa_metadata_info_v1", "get_pa_metadata_info")
+_get_pa_metadata = _resolve_pa_api("get_pa_metadata_v1", "get_pa_metadata")
+# When False, use non-persistent paged attention (paged_attention_asm) only
+AITER_PA_PERSISTENT_AVAILABLE = (
+    _get_pa_metadata_info is not None and _get_pa_metadata is not None
+)
+
 
 def cdiv(a, b):
     return (a + b - 1) // b
@@ -84,48 +105,69 @@ class AiterAttentionMetadataBuilder:
             max_qlen = 1
 
         num_head_k = max(1, hf_config.num_key_value_heads // get_tp_group().world_size)
-        (
-            (work_meta_data_size, work_meta_data_type),
-            (work_indptr_size, work_indptr_type),
-            (work_info_set_size, work_info_set_type),
-            (reduce_indptr_size, reduce_indptr_type),
-            (reduce_final_map_size, reduce_final_map_type),
-            (reduce_partial_map_size, reduce_partial_map_type),
-        ) = aiter.get_pa_metadata_info_v1(
-            self.max_bs,
-            num_head_k,
-        )
-
         i32_kwargs = {"dtype": torch.int32, "device": self.device}
 
-        pa_persistent_metadata = {
-            "max_qlen": max_qlen,
-            "work_meta_data": torch.empty(
-                work_meta_data_size, dtype=work_meta_data_type, device=self.device
-            ),
-            "work_indptr": torch.empty(
-                work_indptr_size, dtype=work_indptr_type, device=self.device
-            ),
-            "work_info_set": torch.empty(
-                work_info_set_size, dtype=work_info_set_type, device=self.device
-            ),
-            "reduce_indptr": torch.empty(
-                reduce_indptr_size, dtype=reduce_indptr_type, device=self.device
-            ),
-            "reduce_final_map": torch.empty(
-                reduce_final_map_size, dtype=reduce_final_map_type, device=self.device
-            ),
-            "reduce_partial_map": torch.empty(
-                reduce_partial_map_size,
-                dtype=reduce_partial_map_type,
-                device=self.device,
-            ),
-            "kv_indptr": CpuGpuBuffer(self.max_bs + 1, **i32_kwargs),
-            "kv_indices": CpuGpuBuffer(
-                self.max_bs * self.max_num_blocks_per_seq,
-                **i32_kwargs,
-            ),
-        }
+        if _get_pa_metadata_info is not None:
+            (
+                (work_meta_data_size, work_meta_data_type),
+                (work_indptr_size, work_indptr_type),
+                (work_info_set_size, work_info_set_type),
+                (reduce_indptr_size, reduce_indptr_type),
+                (reduce_final_map_size, reduce_final_map_type),
+                (reduce_partial_map_size, reduce_partial_map_type),
+            ) = _get_pa_metadata_info(
+                self.max_bs,
+                num_head_k,
+            )
+            pa_persistent_metadata = {
+                "max_qlen": max_qlen,
+                "work_meta_data": torch.empty(
+                    work_meta_data_size, dtype=work_meta_data_type, device=self.device
+                ),
+                "work_indptr": torch.empty(
+                    work_indptr_size, dtype=work_indptr_type, device=self.device
+                ),
+                "work_info_set": torch.empty(
+                    work_info_set_size, dtype=work_info_set_type, device=self.device
+                ),
+                "reduce_indptr": torch.empty(
+                    reduce_indptr_size, dtype=reduce_indptr_type, device=self.device
+                ),
+                "reduce_final_map": torch.empty(
+                    reduce_final_map_size,
+                    dtype=reduce_final_map_type,
+                    device=self.device,
+                ),
+                "reduce_partial_map": torch.empty(
+                    reduce_partial_map_size,
+                    dtype=reduce_partial_map_type,
+                    device=self.device,
+                ),
+                "kv_indptr": CpuGpuBuffer(self.max_bs + 1, **i32_kwargs),
+                "kv_indices": CpuGpuBuffer(
+                    self.max_bs * self.max_num_blocks_per_seq,
+                    **i32_kwargs,
+                ),
+            }
+        else:
+            # No aiter PA metadata API: use minimal dummy buffers. Only non-persistent
+            # paged attention (paged_attention_asm) will be used; persistent path is disabled.
+            pa_persistent_metadata = {
+                "max_qlen": max_qlen,
+                "work_meta_data": torch.empty(1, dtype=torch.int32, device=self.device),
+                "work_indptr": torch.empty(1, dtype=torch.int32, device=self.device),
+                "work_info_set": torch.empty(1, dtype=torch.int32, device=self.device),
+                "reduce_indptr": torch.empty(1, dtype=torch.int32, device=self.device),
+                "reduce_final_map": torch.empty(1, dtype=torch.int32, device=self.device),
+                "reduce_partial_map": torch.empty(
+                    1, dtype=torch.int32, device=self.device
+                ),
+                "kv_indptr": CpuGpuBuffer(self.max_bs + 1, **i32_kwargs),
+                "kv_indices": CpuGpuBuffer(
+                    self.max_bs * self.max_num_blocks_per_seq,
+                    **i32_kwargs,
+                ),
+            }
         self.model_runner.forward_vars.update(pa_persistent_metadata)
 
     def set_aiter_persistent_worker_buffers(self, bs: int):
@@ -151,7 +193,12 @@ class AiterAttentionMetadataBuilder:
         reduce_final_map = var["reduce_final_map"]
         reduce_partial_map = var["reduce_partial_map"]
 
-        aiter.get_pa_metadata_v1(
+        if _get_pa_metadata is None:
+            raise AttributeError(
+                "aiter does not expose get_pa_metadata_v1 / get_pa_metadata. "
+                "Please upgrade the amd-aiter package."
+            )
+        _get_pa_metadata(
             qo_indptr,
             kv_indptr,
             seq_lens_kv,

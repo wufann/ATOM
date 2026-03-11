@@ -10,7 +10,11 @@ import os
 import torch
 import aiter
 from aiter import dtypes, QuantType
-from aiter.ops.triton.batched_gemm_a16wfp4 import batched_gemm_a16wfp4
+# Optional import for batched_gemm_a16wfp4 (may not be available in older aiter versions)
+try:
+    from aiter.ops.triton.batched_gemm_a16wfp4 import batched_gemm_a16wfp4
+except ImportError:
+    batched_gemm_a16wfp4 = None
 
 from aiter.ops.triton.batched_gemm_a8w8_a_per_token_group_prequant_w_per_batched_tensor_quant import (  # noqa: E501 # isort: skip
     batched_gemm_a8w8_a_per_token_group_prequant_w_per_batched_tensor_quant as _aiter_triton_fp8_bmm,
@@ -172,6 +176,11 @@ class MLAAttentionImplPluginModeMethods:
                 device=x.device,
                 dtype=torch.bfloat16,
             )
+            if batched_gemm_a16wfp4 is None:
+                raise ImportError(
+                    "batched_gemm_a16wfp4 is not available in the installed version of aiter. "
+                    "Please update amd-aiter or disable FP4 BMM."
+                )
             output = batched_gemm_a16wfp4(
                 x,
                 self.W_V,
@@ -741,6 +750,11 @@ class MLAAttentionImplPluginModeMethods:
                 decode_q_pe = decode_pe_padded
 
             if self.is_aiter_triton_fp4_bmm_enabled:
+                if batched_gemm_a16wfp4 is None:
+                    raise ImportError(
+                        "batched_gemm_a16wfp4 is not available in the installed version of aiter. "
+                        "Please update amd-aiter or disable FP4 BMM."
+                    )
                 decode_ql_nope = batched_gemm_a16wfp4(
                     decode_q_nope,
                     self.W_K,
@@ -774,6 +788,12 @@ class MLAAttentionImplPluginModeMethods:
                     ),
                     device=decode_ql_nope.device,
                 )
+                if not hasattr(aiter, 'fused_qk_rope_concat_and_cache_mla'):
+                    raise ImportError(
+                        "fused_qk_rope_concat_and_cache_mla is not available in the installed "
+                        "version of aiter. Please update amd-aiter to a version that includes "
+                        "this function, or use a model that doesn't require MLA attention."
+                    )
                 aiter.fused_qk_rope_concat_and_cache_mla(
                     decode_ql_nope,
                     decode_q_pe,

@@ -51,7 +51,9 @@ class PiecewiseBackend:
 
         self.is_full_graph = total_piecewise_compiles == 1
 
-        self.compile_sizes: set[int] = set(self.compilation_config.compile_sizes)
+        self.compile_sizes: set[int] = set(
+            self.compilation_config.compile_sizes or []
+        )
 
         self.first_run_finished = False
 

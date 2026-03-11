@@ -645,10 +645,8 @@ class VllmBackend:
         logger.info("Dynamo bytecode transform time: %.2f s", dynamo_time)
         self.compilation_config.compilation_time += dynamo_time
 
-        # we control the compilation process, each instance can only be
-        # called once
-        assert not self._called, "VllmBackend can only be called once"
-
+        # Dynamo may call the backend multiple times (e.g. graph breaks);
+        # allow multiple calls and compile each graph.
         self.graph = graph
         # self.configure_post_pass()
 

@@ -45,10 +45,15 @@ from aiter.ops.triton.fused_fp8_quant import (
     fused_reduce_rms_fp8_group_quant,
     fused_rms_fp8_group_quant,
 )
-from aiter.ops.triton.fused_mxfp4_quant import (
-    fused_reduce_rms_mxfp4_quant,
-    fused_rms_mxfp4_quant,
-)
+# Optional imports (may not be available in older aiter versions)
+try:
+    from aiter.ops.triton.fused_mxfp4_quant import (
+        fused_reduce_rms_mxfp4_quant,
+        fused_rms_mxfp4_quant,
+    )
+except ImportError:
+    fused_reduce_rms_mxfp4_quant = None
+    fused_rms_mxfp4_quant = None
 from aiter.ops.triton.pa_mqa_logits import deepgemm_fp8_paged_mqa_logits
 from aiter.rotary_embedding import get_rope
 from atom.config import (

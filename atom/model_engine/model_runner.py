@@ -12,7 +12,15 @@ import numpy as np
 import torch
 import torch.profiler as torch_profiler
 import tqdm
-from aiter import destroy_dist_env, dtypes, init_dist_env
+try:
+    from aiter import destroy_dist_env, dtypes, init_dist_env
+except (ImportError, AttributeError):
+    from aiter.ops.communication import init_dist_env, destroy_dist_env
+    try:
+        from aiter.utility import dtypes
+    except (ImportError, AttributeError):
+        from atom.config import d_dtypes
+        dtypes = type("Dtypes", (), {"d_dtypes": d_dtypes, "fp8": d_dtypes.get("fp8", torch.uint8), "fp32": torch.float32})()
 from aiter.dist.parallel_state import (
     get_dp_group,
     get_pp_group,
@@ -57,6 +65,7 @@ support_model_arch_dict = {
     "GptOssForCausalLM": "atom.models.gpt_oss.GptOssForCausalLM",
     "Glm4MoeForCausalLM": "atom.models.glm4_moe.Glm4MoeForCausalLM",
     "Qwen3NextForCausalLM": "atom.models.qwen3_next.Qwen3NextForCausalLM",
+    "Gemma3ForCausalLM": "atom.models.gemma3.Gemma3ForCausalLM",
 }
 # seed = 34567
 # np.random.seed(seed)

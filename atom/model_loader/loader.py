@@ -21,17 +21,14 @@ from atom.model_loader.weight_utils import (
     download_weights_from_hf,
     filter_duplicate_safetensors_files,
 )
-from atom.models.deepseek_mtp import (
-    get_spec_layer_idx_from_weight_name,
-    rewrite_spec_layer_name,
-)
+# deepseek_mtp imported lazily below to avoid pulling in attention_mla (and aiter
+# fused_qk_rope_concat_and_cache_mla) when loading non-MLA models like Gemma3
 from atom.model_ops.base_config import QuantizeMethodBase
 from atom.model_ops.moe import (
     FusedMoEMethodBase,
     is_rocm_aiter_fusion_shared_expert_enabled,
 )
 from aiter.dist.parallel_state import get_tp_group
-from atom.models.qwen3_next_mtp import remap_mtp_weight_name
 
 from atom.plugin.prepare import is_sglang
 
@@ -161,11 +158,16 @@ def load_model(
                 continue
             if spec_decode:
                 if hf_config.model_type == "deepseek_mtp":
+                    from atom.models.deepseek_mtp import (
+                        get_spec_layer_idx_from_weight_name,
+                        rewrite_spec_layer_name,
+                    )
                     spec_layer = get_spec_layer_idx_from_weight_name(hf_config, name)
                     if spec_layer is None:
                         continue
                     name = rewrite_spec_layer_name(spec_layer, name)
                 elif hf_config.model_type == "qwen3_next_mtp":
+                    from atom.models.qwen3_next_mtp import remap_mtp_weight_name
                     remapped_name = remap_mtp_weight_name(name)
                     if remapped_name is None:
                         continue

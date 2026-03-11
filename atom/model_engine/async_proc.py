@@ -70,8 +70,10 @@ class AsyncIOProc:
             return
         self.still_running = False
         logger.debug(f"{self.label}: Shutting down runner...")
-        for el in self.runners:
-            el.exit()
+        runners = getattr(self, "runners", None)
+        if runners is not None:
+            for el in runners:
+                el.exit()
         # Close shared memory reader handle to prevent resource_tracker leak
         self._cleanup_shared_memory()
         for t in self.io_threads:

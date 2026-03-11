@@ -11,8 +11,54 @@ from dataclasses import dataclass, field
 from typing import Any, cast, Optional, Union
 
 import torch
-from aiter import QuantType
-from aiter.utility.dtypes import d_dtypes
+
+# QuantType may be at top level or in aiter.ops (depends on aiter version/source layout)
+try:
+    from aiter import QuantType
+except (ImportError, AttributeError):
+    try:
+        from aiter.ops.enum import QuantType
+    except (ImportError, AttributeError):
+        try:
+            from aiter.ops.quant import QuantType
+        except (ImportError, AttributeError):
+            # Minimal stub when aiter enum/quant not available (e.g. local aiter build).
+            # Must be picklable for multiprocessing (use a real class in this module).
+            class _QuantValue:
+                __slots__ = ("value",)
+                def __init__(self, value): self.value = value
+
+            class QuantType:
+                No = _QuantValue(0)
+                per_Tensor = _QuantValue(1)
+                per_Token = _QuantValue(2)
+                per_1x32 = _QuantValue(3)
+                per_1x128 = _QuantValue(4)
+
+try:
+    from aiter.utility.dtypes import d_dtypes
+except (ImportError, AttributeError):
+    # aiter.utility.dtypes may fail if it imports aiter.ops.enum
+    _dt = torch
+    d_dtypes = {
+        "fp8": getattr(_dt, "float8_e4m3fn", _dt.uint8),
+        "fp8_e8m0": getattr(_dt, "float8_e8m0fnu", _dt.uint8),
+        "fp16": _dt.float16,
+        "bf16": _dt.bfloat16,
+        "fp32": _dt.float32,
+        "i4x2": getattr(_dt, "int4", _dt.uint8),
+        "fp4x2": getattr(_dt, "float4_e2m1fn_x2", _dt.uint8),
+        "u32": _dt.uint32,
+        "i32": _dt.int32,
+        "i16": _dt.int16,
+        "i8": _dt.int8,
+    }
+
+# Ensure aiter has a logger (some aiter builds/submodules expect it, e.g. aiter.dist.shm_broadcast)
+import aiter as _aiter_mod
+if not hasattr(_aiter_mod, "logger"):
+    _aiter_mod.logger = logging.getLogger("aiter")
+
 from atom.utils import envs, get_open_port
 from atom.utils.distributed.utils import stateless_init_torch_distributed_process_group
 from torch.distributed import ProcessGroup, ReduceOp
@@ -585,15 +631,16 @@ def get_hf_config(model: str) -> PretrainedConfig:
             return token
         return None
 
+    hf_token = _get_hf_token()
     if model_type in _CONFIG_REGISTRY:
         config_class = AutoConfig.for_model(_CONFIG_REGISTRY[model_type])
         return config_class.from_pretrained(
             model,
             # revision=revision,
             # code_revision=code_revision,
-            token=_get_hf_token(),
+            token=hf_token,
         )
-    return AutoConfig.from_pretrained(model)
+    return AutoConfig.from_pretrained(model, token=hf_token)
 
 
 def get_generation_config(model: str) -> GenerationConfig:
