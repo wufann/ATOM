@@ -100,14 +100,12 @@ fi
 
 if [ "$TYPE" == "benchmark" ]; then
   echo ""
-  echo "========== Cloning bench_serving =========="
-  git clone https://github.com/kimbochen/bench_serving.git && chmod +x bench_serving/benchmark_serving.py
   echo "========== Running benchmark test =========="
   if [ "${ENABLE_TORCH_PROFILER:-0}" == "1" ]; then
     echo "Starting torch profiler..."
     curl -s -S -X POST http://127.0.0.1:8000/start_profile || echo "Warning: failed to start profiler"
   fi
-  python bench_serving/benchmark_serving.py \
+  python -m atom.benchmarks.benchmark_serving \
     --model=$MODEL_PATH --backend=vllm --base-url="http://localhost:8000" \
     --dataset-name=random \
     --random-input-len=$ISL --random-output-len=$OSL --random-range-ratio=$RANDOM_RANGE_RATIO \
