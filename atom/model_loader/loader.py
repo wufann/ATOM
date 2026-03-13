@@ -203,6 +203,11 @@ def load_model(
                     v, shard_id = packed_modules_mapping[k]
                     param_name = name.replace(k, v)
                     # FIXME output_scale has a value, so accuracy is incorrect. this should be loaded and used in llfp4.
+                    print('[zejun] param_name: ', param_name, flush=True)
+                    print('[zejun] name: ', name, flush=True)
+                    print('[zejun] shard_id: ', shard_id, flush=True)
+                    print('[zejun] k: ', k, flush=True)
+                    print('[zejun] v: ', v, flush=True)
                     if "output_scale" not in param_name:
                         param = model.get_parameter(param_name)
                         weight_loader = getattr(param, "weight_loader")
