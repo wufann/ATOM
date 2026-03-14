@@ -145,7 +145,19 @@
 <script>
 'use strict';
 (function() {
-  const COLORS = ['#58a6ff','#3fb950','#f78166','#d2a8ff','#79c0ff','#56d364','#ffa657','#ff7b72','#7ee787','#e3b341'];
+  // Generate stable color from string hash so same config always gets same color across charts
+  function strHash(s) {
+    let h = 0;
+    for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+    return Math.abs(h);
+  }
+  function hslColor(str, saturation, lightness) {
+    const hue = strHash(str) % 360;
+    return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+  }
+  function getColor(name) {
+    return hslColor(name, 70, 60);
+  }
 
   Chart.defaults.global.defaultFontColor = '#8b949e';
   Chart.defaults.global.defaultFontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
@@ -226,7 +238,22 @@
   }
 
   // --- Charts helper ---
-  function makeChart(container, title, datasets, labels, unit, biggerIsBetter) {
+  // Build ordered x-axis labels from all runs sorted by date
+  const allRuns = Object.values(data.entries).flat().sort((a, b) => a.date - b.date);
+  // Deduplicate by commit id, keep chronological order
+  const seen = new Set();
+  const orderedLabels = [];
+  const commitDateMap = {};
+  for (const r of allRuns) {
+    const cid = r.commit.id.slice(0, 7);
+    if (!seen.has(cid)) {
+      seen.add(cid);
+      orderedLabels.push(cid);
+      commitDateMap[cid] = r.date;
+    }
+  }
+
+  function makeChart(container, title, seriesMap, unit) {
     const card = document.createElement('div');
     card.className = 'chart-card';
     card.innerHTML = '<h3>' + title + '</h3>';
@@ -234,38 +261,64 @@
     card.appendChild(canvas);
     container.appendChild(card);
 
+    // Align each series data to the global ordered labels
+    const datasets = [];
+    for (const [config, points] of Object.entries(seriesMap)) {
+      const color = getColor(config);
+      // Map commit -> value for this series
+      const pointMap = {};
+      for (const p of points) {
+        pointMap[p.commit.id.slice(0, 7)] = p;
+      }
+      // Build data array aligned to orderedLabels (null for missing)
+      const chartData = orderedLabels.map(cid => pointMap[cid] ? pointMap[cid].bench.value : null);
+      datasets.push({
+        label: config, data: chartData,
+        borderColor: color, backgroundColor: color + '20',
+        borderWidth: 2, pointRadius: 4, pointHoverRadius: 6,
+        fill: false, spanGaps: true,
+        _pointMap: pointMap
+      });
+    }
+
     new Chart(canvas, {
       type: 'line',
-      data: { labels, datasets },
+      data: { labels: orderedLabels, datasets },
       options: {
         responsive: true,
         legend: { labels: { fontColor: '#c9d1d9', fontSize: 11, boxWidth: 12 } },
         scales: {
-          xAxes: [{ gridLines: { color: '#21262d' }, scaleLabel: { display: true, labelString: 'Commit', fontColor: '#8b949e' } }],
+          xAxes: [{ gridLines: { color: '#21262d' }, scaleLabel: { display: true, labelString: 'Commit', fontColor: '#8b949e' }, ticks: { fontColor: '#8b949e' } }],
           yAxes: [{ gridLines: { color: '#21262d' }, scaleLabel: { display: true, labelString: unit, fontColor: '#8b949e' }, ticks: { beginAtZero: false, fontColor: '#8b949e' } }]
         },
         tooltips: {
           backgroundColor: '#161b22', borderColor: '#30363d', borderWidth: 1,
           titleFontColor: '#f0f6fc', bodyFontColor: '#c9d1d9',
           callbacks: {
+            title: (items) => {
+              const cid = orderedLabels[items[0].index];
+              return cid + ' · ' + new Date(commitDateMap[cid]).toLocaleString();
+            },
             afterTitle: (items) => {
+              const cid = orderedLabels[items[0].index];
               const ds = datasets[items[0].datasetIndex];
-              const p = ds._points && ds._points[items[0].index];
-              if (!p) return '';
-              return '\n' + p.commit.message.split('\n')[0] + '\n' + new Date(p.date).toLocaleString();
+              const p = ds._pointMap[cid];
+              return p ? p.commit.message.split('\n')[0] : '';
             },
             label: (item) => ' ' + datasets[item.datasetIndex].label + ': ' + item.value + ' ' + unit,
             afterLabel: (item) => {
+              const cid = orderedLabels[item.index];
               const ds = datasets[item.datasetIndex];
-              const p = ds._points && ds._points[item.index];
+              const p = ds._pointMap[cid];
               return (p && p.bench.extra) ? '\n' + p.bench.extra : '';
             }
           }
         },
         onClick: (_e, elems) => {
           if (!elems.length) return;
+          const cid = orderedLabels[elems[0]._index];
           const ds = datasets[elems[0]._datasetIndex];
-          const p = ds._points && ds._points[elems[0]._index];
+          const p = ds._pointMap[cid];
           if (!p) return;
           const extra = p.bench.extra || '';
           const rm = extra.match(/Run:\s*(https:\/\/\S+)/);
@@ -286,40 +339,47 @@
     groups[key][config] = points;
   }
 
-  // Collect all commit labels in order
-  const allRuns = Object.values(data.entries).flat().sort((a, b) => a.date - b.date);
-  const commitLabels = allRuns.map(r => r.commit.id.slice(0, 7));
-
-  function buildDatasets(seriesMap, colorOffset) {
-    const datasets = [];
-    let ci = colorOffset || 0;
+  // --- Helper: group series by model ---
+  // Input: { "Model ISL/OSL c=N": [points] }
+  // Output: { "Model": { "ISL/OSL c=N": [points] } }
+  function groupByModel(seriesMap) {
+    const modelGroups = {};
     for (const [config, points] of Object.entries(seriesMap)) {
-      const color = COLORS[ci++ % COLORS.length];
-      datasets.push({
-        label: config, data: points.map(p => p.bench.value),
-        borderColor: color, backgroundColor: color + '20', borderWidth: 2,
-        pointRadius: 3, pointHoverRadius: 5, fill: false, _points: points
-      });
+      // config = "DeepSeek-R1-0528-mtp3 1024/1024 c=128"
+      const parts = config.match(/^(\S+)\s+(.+)$/);
+      if (!parts) continue;
+      const [, model, rest] = parts;
+      if (!modelGroups[model]) modelGroups[model] = {};
+      modelGroups[model][rest] = points;
     }
-    return datasets;
+    return modelGroups;
   }
 
   // --- Throughput tab ---
   const tputContainer = document.getElementById('throughput-charts');
   if (groups['throughput|tok/s']) {
-    makeChart(tputContainer, 'Output Throughput over Time', buildDatasets(groups['throughput|tok/s']), commitLabels, 'tok/s', true);
+    const byModel = groupByModel(groups['throughput|tok/s']);
+    for (const [model, series] of Object.entries(byModel)) {
+      makeChart(tputContainer, model + ' — Output Throughput', series, 'tok/s');
+    }
   }
   if (groups['Total Tput|tok/s']) {
-    makeChart(tputContainer, 'Total Throughput over Time', buildDatasets(groups['Total Tput|tok/s'], 5), commitLabels, 'tok/s', true);
+    const byModel = groupByModel(groups['Total Tput|tok/s']);
+    for (const [model, series] of Object.entries(byModel)) {
+      makeChart(tputContainer, model + ' — Total Throughput', series, 'tok/s');
+    }
   }
 
   // --- Latency tab ---
   const latContainer = document.getElementById('latency-charts');
-  for (const [key, series] of Object.entries(groups)) {
+  for (const [key, seriesAll] of Object.entries(groups)) {
     const [metric, unit] = key.split('|');
-    if (metric === 'throughput' || metric === 'Total Tput') continue;
-    const title = { TPOT: 'Time Per Output Token', TTFT: 'Time To First Token', ITL: 'Inter-Token Latency', E2EL: 'End-to-End Latency' }[metric] || metric;
-    makeChart(latContainer, title + ' over Time', buildDatasets(series), commitLabels, unit, false);
+    if (metric === 'throughput' || metric === 'Total Tput' || metric === '_gpu_count') continue;
+    const metricTitle = { TPOT: 'Time Per Output Token', TTFT: 'Time To First Token', ITL: 'Inter-Token Latency', E2EL: 'End-to-End Latency' }[metric] || metric;
+    const byModel = groupByModel(seriesAll);
+    for (const [model, series] of Object.entries(byModel)) {
+      makeChart(latContainer, model + ' — ' + metricTitle, series, unit);
+    }
   }
 
   // --- Throughput vs Latency tab (scatter, like InferenceX) ---
@@ -344,7 +404,6 @@
     // Build scatter datasets: x=throughput, y=TPOT
     function makeScatter(title, xMetric, yMetric, xLabel, yLabel) {
       const datasets = [];
-      let ci = 0;
       for (const [modelConfig, concMap] of Object.entries(configs)) {
         const points = [];
         const concLabels = [];
@@ -355,7 +414,7 @@
           }
         }
         if (points.length === 0) continue;
-        const color = COLORS[ci++ % COLORS.length];
+        const color = getColor(modelConfig);
         datasets.push({
           label: modelConfig,
           data: points,
@@ -411,20 +470,20 @@
     // Build derived metric and plot
     function makeInteractiveVsThroughput() {
       const datasets = [];
-      let ci = 0;
       for (const [modelConfig, concMap] of Object.entries(configs)) {
         const points = [];
         const concLabels = [];
         for (const [conc, metrics] of Object.entries(concMap).sort((a,b) => +a[0] - +b[0])) {
-          const tput = metrics['throughput'];
+          const totalTput = metrics['Total Tput'];
           const tpot = metrics['TPOT'];
-          if (tput && tpot && tpot > 0) {
-            points.push({ x: 1000 / tpot, y: tput });
+          const gpuCount = metrics['_gpu_count'] || 8;
+          if (totalTput && tpot && tpot > 0) {
+            points.push({ x: 1000 / tpot, y: totalTput / gpuCount });
             concLabels.push(conc);
           }
         }
         if (points.length === 0) continue;
-        const color = COLORS[ci++ % COLORS.length];
+        const color = getColor(modelConfig);
         datasets.push({
           label: modelConfig,
           data: points,
@@ -466,7 +525,7 @@
               label: (item) => {
                 const ds = datasets[item.datasetIndex];
                 const conc = ds._concLabels[item.index] || '?';
-                return ` c=${conc}: ${(+item.xLabel).toFixed(1)} tok/s/user, ${(+item.yLabel).toFixed(0)} tok/s`;
+                return ` c=${conc}: ${(+item.xLabel).toFixed(1)} tok/s/user, ${(+item.yLabel).toFixed(0)} tok/s/gpu`;
               }
             }
           }
@@ -477,12 +536,16 @@
     makeInteractiveVsThroughput();
   })();
 
-  // --- Historical tab: all metrics ---
+  // --- Historical tab: all metrics, grouped by model ---
   const histContainer = document.getElementById('historical-charts');
-  for (const [key, series] of Object.entries(groups)) {
+  for (const [key, seriesAll] of Object.entries(groups)) {
     const [metric, unit] = key.split('|');
-    const title = { throughput: 'Output Throughput', 'Total Tput': 'Total Throughput', TPOT: 'Time Per Output Token', TTFT: 'Time To First Token', ITL: 'Inter-Token Latency', E2EL: 'End-to-End Latency' }[metric] || metric;
-    makeChart(histContainer, title, buildDatasets(series), commitLabels, unit, false);
+    if (metric === '_gpu_count') continue;
+    const metricTitle = { throughput: 'Output Throughput', 'Total Tput': 'Total Throughput', TPOT: 'Time Per Output Token', TTFT: 'Time To First Token', ITL: 'Inter-Token Latency', E2EL: 'End-to-End Latency' }[metric] || metric;
+    const byModel = groupByModel(seriesAll);
+    for (const [model, series] of Object.entries(byModel)) {
+      makeChart(histContainer, model + ' — ' + metricTitle, series, unit);
+    }
   }
 })();
 </script>
