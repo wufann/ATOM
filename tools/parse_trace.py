@@ -115,20 +115,44 @@ def _find_llvm_cxxfilt() -> Optional[str]:
         _LLVM_CXXFILT_PATH = path
         return path
 
-    # Search common locations
-    search_dirs = ["/root/.triton/llvm", "/opt/rocm", "/usr"]
+    # Check known install paths before resorting to find
+    known_paths = [
+        "/opt/rocm/llvm/bin/llvm-cxxfilt",
+        "/usr/bin/llvm-cxxfilt",
+        "/usr/local/bin/llvm-cxxfilt",
+    ]
+    for p in known_paths:
+        if os.path.isfile(p):
+            _LLVM_CXXFILT_PATH = p
+            return p
+
+    # Fallback: search common locations with depth limit
+    search_dirs = ["/root/.triton/llvm", "/opt/rocm"]
     for d in search_dirs:
+        if not os.path.isdir(d):
+            continue
         try:
             result = subprocess.run(
-                ["find", d, "-name", "llvm-cxxfilt", "-type", "f"],
+                [
+                    "find",
+                    d,
+                    "-maxdepth",
+                    "5",
+                    "-name",
+                    "llvm-cxxfilt",
+                    "-type",
+                    "f",
+                    "-print",
+                    "-quit",
+                ],
                 capture_output=True,
                 text=True,
                 timeout=5,
             )
-            for line in result.stdout.strip().split("\n"):
-                if line:
-                    _LLVM_CXXFILT_PATH = line
-                    return line
+            found = result.stdout.strip()
+            if found:
+                _LLVM_CXXFILT_PATH = found
+                return found
         except (subprocess.TimeoutExpired, OSError):
             continue
 
@@ -152,7 +176,8 @@ def _demangle_batch(names: list[str]) -> None:
 
     try:
         result = subprocess.run(
-            [cxxfilt] + mangled,
+            [cxxfilt],
+            input="\n".join(mangled),
             capture_output=True,
             text=True,
             timeout=30,
@@ -165,7 +190,7 @@ def _demangle_batch(names: list[str]) -> None:
             _DEMANGLE_CACHE[n] = n
 
 
-def _shorten_kernel_name(name: str) -> str:
+def _demangle_kernel_name(name: str) -> str:
     """Demangle C++ mangled kernel name (uses cache populated by _demangle_batch)."""
     if name in _DEMANGLE_CACHE:
         return _DEMANGLE_CACHE[name]
@@ -260,7 +285,7 @@ def write_breakdown_xlsx(
             ws.append(
                 [
                     renamed_mod,
-                    _shorten_kernel_name(kernel),
+                    _demangle_kernel_name(kernel),
                     dur,
                     round(pct, 1),
                     mod_total,
@@ -281,9 +306,7 @@ def write_breakdown_xlsx(
                 ws.merge_cells(start_row=r1, start_column=8, end_row=r2, end_column=8)
 
     total_avg_duration = sum(float(r[2]) for r in avg_rows) if avg_rows else ""
-    ws.append(
-        ["TOTAL", "", total_duration, "100.0", "", "100.0", total_avg_duration, ""]
-    )
+    ws.append(["TOTAL", "", total_duration, 100.0, "", 100.0, total_avg_duration, ""])
 
     # --- Kernel Summary Sheet ---
     if rows:
@@ -303,7 +326,7 @@ def _write_kernel_summary_sheet(
 
     kernel_stats: Dict[str, List[float]] = {}
     for _, kernel, dur in rows:
-        short_name = _shorten_kernel_name(kernel)
+        short_name = _demangle_kernel_name(kernel)
         kernel_stats.setdefault(short_name, []).append(float(dur))
 
     # Sort by total duration descending
@@ -646,7 +669,11 @@ def clean_module_name(name: str, mapped_kernel_name: str = "") -> str:
         "",
         "N/A",
     ):
-        name = mapped_kernel_name
+        name = _demangle_kernel_name(mapped_kernel_name)
+
+    # Demangle mangled C++ names
+    if name.startswith("_Z"):
+        name = _demangle_kernel_name(name)
 
     # Remove 'aiter::' prefix if present
     if name.startswith("aiter::"):
