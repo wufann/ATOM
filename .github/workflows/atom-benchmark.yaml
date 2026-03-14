@@ -530,7 +530,7 @@ jobs:
             echo "========== Server args: ${SERVER_ARGS:-default} =========="
             ARGS="--kv_cache_dtype fp8 -tp 8 --torch-profiler-dir /app/trace --mark-trace ${SERVER_ARGS}"
             docker exec atom-regression bash -lc "
-              pkill -f 'atom.entrypoints' 2>/dev/null; sleep 3
+              pkill -f 'atom.entrypoints' || true; sleep 3
               .github/scripts/atom_test.sh launch $MODEL_PATH $ARGS
             "
 
