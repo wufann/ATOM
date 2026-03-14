@@ -109,7 +109,7 @@ jobs:
             runner: "atom-mi355-8gpu.predownload"
             env_vars: ""
           - display: "GLM-5-FP8"
-            path: "amd/GLM-5-FP8"
+            path: "zai-org/GLM-5-FP8"
             prefix: "glm-5-fp8"
             args: "--kv_cache_dtype fp8 -tp 8"
             bench_args: ""
@@ -226,15 +226,15 @@ jobs:
           if [ -d "/models" ]; then model_path="/models/${{ env.MODEL_PATH }}"
           else model_path="${{ env.MODEL_PATH }}"; fi
 
-          docker exec atom-benchmark bash -lc "
+          docker exec atom-benchmark bash -lc "set -euo pipefail
             ENABLE_TORCH_PROFILER=${{ inputs.enable_profiler && '1' || '0' }} \
-              .github/scripts/atom_test.sh launch \$model_path ${{ env.ARGS }} ${{ inputs.extra_args || '' }}
+              .github/scripts/atom_test.sh launch $model_path ${{ env.ARGS }} ${{ inputs.extra_args || '' }}
             echo '========== Running benchmark =========='
             ENABLE_TORCH_PROFILER=${{ inputs.enable_profiler && '1' || '0' }} \
               RESULT_FILENAME=${{ env.RESULT_FILENAME }} \
               SERVER_ARGS='${{ env.ARGS }}' \
               BENCH_EXTRA_ARGS='${{ matrix.model.bench_args }}' \
-              .github/scripts/atom_test.sh benchmark \$model_path
+              .github/scripts/atom_test.sh benchmark $model_path
           "
 
       - name: Copy profiler traces
@@ -529,7 +529,7 @@ jobs:
           " | while IFS='|' read SERVER_ARGS BENCH_ARGS CONFIG_LIST; do
             echo "========== Server args: ${SERVER_ARGS:-default} =========="
             ARGS="--kv_cache_dtype fp8 -tp 8 --torch-profiler-dir /app/trace --mark-trace ${SERVER_ARGS}"
-            docker exec atom-regression bash -lc "
+            docker exec atom-regression bash -lc "set -euo pipefail
               pkill -f 'atom.entrypoints' || true; sleep 3
               .github/scripts/atom_test.sh launch $MODEL_PATH $ARGS
             "

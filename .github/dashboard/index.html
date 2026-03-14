@@ -156,7 +156,12 @@
     return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
   }
   function getColor(name) {
-    return hslColor(name, 70, 60);
+    const h = strHash(name) % 360;
+    return `hsl(${h}, 70%, 60%)`;
+  }
+  function getColorAlpha(name, alpha) {
+    const h = strHash(name) % 360;
+    return `hsla(${h}, 70%, 60%, ${alpha})`;
   }
 
   Chart.defaults.global.defaultFontColor = '#8b949e';
@@ -274,7 +279,7 @@
       const chartData = orderedLabels.map(cid => pointMap[cid] ? pointMap[cid].bench.value : null);
       datasets.push({
         label: config, data: chartData,
-        borderColor: color, backgroundColor: color + '20',
+        borderColor: color, backgroundColor: getColorAlpha(config, 0.12),
         borderWidth: 2, pointRadius: 4, pointHoverRadius: 6,
         fill: false, spanGaps: true,
         _pointMap: pointMap
@@ -419,7 +424,7 @@
           label: modelConfig,
           data: points,
           borderColor: color,
-          backgroundColor: color + '40',
+          backgroundColor: getColorAlpha(modelConfig, 0.25),
           borderWidth: 2,
           pointRadius: 5,
           pointHoverRadius: 7,
@@ -488,7 +493,7 @@
           label: modelConfig,
           data: points,
           borderColor: color,
-          backgroundColor: color + '40',
+          backgroundColor: getColorAlpha(modelConfig, 0.25),
           borderWidth: 2,
           pointRadius: 6,
           pointHoverRadius: 8,

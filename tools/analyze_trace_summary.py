@@ -172,7 +172,7 @@ def generate_report(events: list[StepEvent], filepath: str) -> str:
             )
         lines.append("")
 
-        if len(step_means) >= 2 and step_means[0] > step_means[1]:
+        if len(step_means) >= 2 and step_means[0] > step_means[1] and step_means[0] > 0:
             overhead = step_means[0] - step_means[1]
             lines.append(
                 f"> **Note:** Step 0 is {format_duration(overhead)} slower than step 1 "

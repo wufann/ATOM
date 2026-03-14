@@ -1540,7 +1540,12 @@ class ModelRunner:
             label = f"prefill[bs={bs}"
             if batch is not None:
                 ctx = batch.context_lens
-                ctx_str = str(ctx[0]) if len(ctx) == 1 else str(ctx.tolist())
+                if len(ctx) == 1:
+                    ctx_str = str(ctx[0])
+                elif len(ctx) <= 5:
+                    ctx_str = str(ctx.tolist())
+                else:
+                    ctx_str = f"{ctx[:3].tolist()}...+{len(ctx)-3}"
                 label += f" tok={batch.total_tokens_num} ctx={ctx_str}"
             label += "]"
             with record_function(label):

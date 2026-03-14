@@ -136,43 +136,41 @@ def _find_llvm_cxxfilt() -> Optional[str]:
     return None
 
 
-def _demangle_name(name: str) -> str:
-    """Demangle a C++ mangled name using llvm-cxxfilt."""
-    if name in _DEMANGLE_CACHE:
-        return _DEMANGLE_CACHE[name]
-
-    if not name.startswith("_Z"):
-        _DEMANGLE_CACHE[name] = name
-        return name
+def _demangle_batch(names: list[str]) -> None:
+    """Batch demangle C++ mangled names using a single llvm-cxxfilt call."""
+    mangled = [n for n in names if n.startswith("_Z") and n not in _DEMANGLE_CACHE]
+    if not mangled:
+        return
 
     cxxfilt = _find_llvm_cxxfilt()
     if not cxxfilt:
-        _DEMANGLE_CACHE[name] = name
-        return name
+        for n in mangled:
+            _DEMANGLE_CACHE[n] = n
+        return
 
     import subprocess
 
     try:
         result = subprocess.run(
-            [cxxfilt, name],
+            [cxxfilt] + mangled,
             capture_output=True,
             text=True,
-            timeout=5,
+            timeout=30,
         )
-        demangled = result.stdout.strip()
-        if demangled and demangled != name:
-            _DEMANGLE_CACHE[name] = demangled
-            return demangled
+        demangled_list = result.stdout.strip().split("\n")
+        for orig, dem in zip(mangled, demangled_list):
+            _DEMANGLE_CACHE[orig] = dem.strip() if dem.strip() else orig
     except (subprocess.TimeoutExpired, OSError):
-        pass
-
-    _DEMANGLE_CACHE[name] = name
-    return name
+        for n in mangled:
+            _DEMANGLE_CACHE[n] = n
 
 
 def _shorten_kernel_name(name: str) -> str:
-    """Demangle C++ mangled kernel names using llvm-cxxfilt."""
-    return _demangle_name(name)
+    """Demangle C++ mangled kernel name (uses cache populated by _demangle_batch)."""
+    if name in _DEMANGLE_CACHE:
+        return _DEMANGLE_CACHE[name]
+    _DEMANGLE_CACHE[name] = name
+    return name
 
 
 def write_breakdown_xlsx(
@@ -192,6 +190,12 @@ def write_breakdown_xlsx(
     AVG columns are appended to the right in the same table.
     """
     wb = Workbook()
+    # Batch demangle all kernel names upfront (single subprocess call)
+    all_kernels = [r[1] for r in rows]
+    if avg_rows:
+        all_kernels.extend(r[1] for r in avg_rows)
+    _demangle_batch(all_kernels)
+
     ws = wb.active
     ws.title = sheet_name
     ws.append(
@@ -482,9 +486,8 @@ def parse_prefill(events: List[Dict], output_xlsx: str, target_layer: int = 3) -
     """
     Parse prefill phase from a run trace (no warmup mixed in this trace).
     """
-    # CPU side prefill/decode annotations.
-    # Accept both legacy "prefill" and traced variants like
-    # "prefill_bs_1_ctxlens_tensor([417], ...)".
+    # CPU side prefill annotations.
+    # Matches "prefill[bs=1 tok=115 ctx=115]" format.
     prefills = [
         e
         for e in events

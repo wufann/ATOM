@@ -8,7 +8,7 @@ from atom.config import CompilationLevel, Config
 from atom.model_loader.loader import load_model
 from atom.utils import CpuGpuBuffer, resolve_obj_by_qualname
 from atom.utils.forward_context import SpecDecodeMetadata, get_forward_context
-from torch.profiler import record_function  # noqa: F811
+from torch.profiler import record_function
 
 logger = logging.getLogger("atom")
 
