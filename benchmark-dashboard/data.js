@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1773494564324,
+  "lastUpdate": 1773499988120,
   "repoUrl": "https://github.com/ROCm/ATOM",
   "entries": {
     "Benchmark": [
@@ -202,6 +202,86 @@ window.BENCHMARK_DATA = {
             "value": 33.01,
             "unit": "ms",
             "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23088513632"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Lingpeng Jin",
+            "username": "valarLip",
+            "email": "103567126+valarLip@users.noreply.github.com"
+          },
+          "committer": {
+            "name": "Lingpeng Jin",
+            "username": "valarLip",
+            "email": "103567126+valarLip@users.noreply.github.com"
+          },
+          "id": "b16705c354088e18f754560da3ccfb13102db46d",
+          "message": "fix: pkill in regression trace exits non-zero when no process found, causing step failure",
+          "timestamp": "2026-03-14T14:41:35Z",
+          "url": "https://github.com/ROCm/ATOM/commit/b16705c354088e18f754560da3ccfb13102db46d"
+        },
+        "date": 1773499986910,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "Meta-Llama-3-8B-Instruct 1024/1024 c=128 throughput (tok/s)",
+            "value": 0,
+            "unit": "tok/s",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23090100375"
+          },
+          {
+            "name": "Meta-Llama-3-8B-Instruct 1024/1024 c=128 Total Tput (tok/s)",
+            "value": 0,
+            "unit": "tok/s",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23090100375"
+          },
+          {
+            "name": "Meta-Llama-3-8B-Instruct 1024/1024 c=128 TTFT (ms)",
+            "value": 0,
+            "unit": "ms",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23090100375"
+          },
+          {
+            "name": "Meta-Llama-3-8B-Instruct 1024/1024 c=128 TPOT (ms)",
+            "value": 0,
+            "unit": "ms",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23090100375"
+          },
+          {
+            "name": "Meta-Llama-3-8B-Instruct 1024/1024 c=128 _gpu_count",
+            "value": 8,
+            "unit": ""
+          },
+          {
+            "name": "Meta-Llama-3-8B-Instruct 1024/1024 c=64 throughput (tok/s)",
+            "value": 0,
+            "unit": "tok/s",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23090100375"
+          },
+          {
+            "name": "Meta-Llama-3-8B-Instruct 1024/1024 c=64 Total Tput (tok/s)",
+            "value": 0,
+            "unit": "tok/s",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23090100375"
+          },
+          {
+            "name": "Meta-Llama-3-8B-Instruct 1024/1024 c=64 TTFT (ms)",
+            "value": 0,
+            "unit": "ms",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23090100375"
+          },
+          {
+            "name": "Meta-Llama-3-8B-Instruct 1024/1024 c=64 TPOT (ms)",
+            "value": 0,
+            "unit": "ms",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23090100375"
+          },
+          {
+            "name": "Meta-Llama-3-8B-Instruct 1024/1024 c=64 _gpu_count",
+            "value": 8,
+            "unit": ""
           }
         ]
       }
