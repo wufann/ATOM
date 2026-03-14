@@ -339,22 +339,47 @@
     groups[key][config] = points;
   }
 
+  // --- Helper: group series by model ---
+  // Input: { "Model ISL/OSL c=N": [points] }
+  // Output: { "Model": { "ISL/OSL c=N": [points] } }
+  function groupByModel(seriesMap) {
+    const modelGroups = {};
+    for (const [config, points] of Object.entries(seriesMap)) {
+      // config = "DeepSeek-R1-0528-mtp3 1024/1024 c=128"
+      const parts = config.match(/^(\S+)\s+(.+)$/);
+      if (!parts) continue;
+      const [, model, rest] = parts;
+      if (!modelGroups[model]) modelGroups[model] = {};
+      modelGroups[model][rest] = points;
+    }
+    return modelGroups;
+  }
+
   // --- Throughput tab ---
   const tputContainer = document.getElementById('throughput-charts');
   if (groups['throughput|tok/s']) {
-    makeChart(tputContainer, 'Output Throughput over Time', groups['throughput|tok/s'], 'tok/s');
+    const byModel = groupByModel(groups['throughput|tok/s']);
+    for (const [model, series] of Object.entries(byModel)) {
+      makeChart(tputContainer, model + ' — Output Throughput', series, 'tok/s');
+    }
   }
   if (groups['Total Tput|tok/s']) {
-    makeChart(tputContainer, 'Total Throughput over Time', groups['Total Tput|tok/s'], 'tok/s');
+    const byModel = groupByModel(groups['Total Tput|tok/s']);
+    for (const [model, series] of Object.entries(byModel)) {
+      makeChart(tputContainer, model + ' — Total Throughput', series, 'tok/s');
+    }
   }
 
   // --- Latency tab ---
   const latContainer = document.getElementById('latency-charts');
-  for (const [key, series] of Object.entries(groups)) {
+  for (const [key, seriesAll] of Object.entries(groups)) {
     const [metric, unit] = key.split('|');
     if (metric === 'throughput' || metric === 'Total Tput' || metric === '_gpu_count') continue;
-    const title = { TPOT: 'Time Per Output Token', TTFT: 'Time To First Token', ITL: 'Inter-Token Latency', E2EL: 'End-to-End Latency' }[metric] || metric;
-    makeChart(latContainer, title + ' over Time', series, unit);
+    const metricTitle = { TPOT: 'Time Per Output Token', TTFT: 'Time To First Token', ITL: 'Inter-Token Latency', E2EL: 'End-to-End Latency' }[metric] || metric;
+    const byModel = groupByModel(seriesAll);
+    for (const [model, series] of Object.entries(byModel)) {
+      makeChart(latContainer, model + ' — ' + metricTitle, series, unit);
+    }
   }
 
   // --- Throughput vs Latency tab (scatter, like InferenceX) ---
@@ -511,13 +536,16 @@
     makeInteractiveVsThroughput();
   })();
 
-  // --- Historical tab: all metrics ---
+  // --- Historical tab: all metrics, grouped by model ---
   const histContainer = document.getElementById('historical-charts');
-  for (const [key, series] of Object.entries(groups)) {
+  for (const [key, seriesAll] of Object.entries(groups)) {
     const [metric, unit] = key.split('|');
     if (metric === '_gpu_count') continue;
-    const title = { throughput: 'Output Throughput', 'Total Tput': 'Total Throughput', TPOT: 'Time Per Output Token', TTFT: 'Time To First Token', ITL: 'Inter-Token Latency', E2EL: 'End-to-End Latency' }[metric] || metric;
-    makeChart(histContainer, title, series, unit);
+    const metricTitle = { throughput: 'Output Throughput', 'Total Tput': 'Total Throughput', TPOT: 'Time Per Output Token', TTFT: 'Time To First Token', ITL: 'Inter-Token Latency', E2EL: 'End-to-End Latency' }[metric] || metric;
+    const byModel = groupByModel(seriesAll);
+    for (const [model, series] of Object.entries(byModel)) {
+      makeChart(histContainer, model + ' — ' + metricTitle, series, unit);
+    }
   }
 })();
 </script>
