@@ -166,6 +166,7 @@ jobs:
           --ulimit memlock=-1 \
           --pull always \
           --ulimit stack=67108864 \
+          -e ATOM_DISABLE_MMAP=true \
           -e ISL=${{ env.ISL }} \
           -e OSL=${{ env.OSL }} \
           -e CONC=${{ env.CONC }} \
@@ -311,6 +312,7 @@ jobs:
           --security-opt seccomp=unconfined \
           --ulimit memlock=-1 \
           --ulimit stack=67108864 \
+          -e ATOM_DISABLE_MMAP=true \
           -e ISL=${{ env.ISL }} \
           -e OSL=${{ env.OSL }} \
           -e CONC=${{ env.CONC }} \
@@ -472,7 +474,8 @@ jobs:
       - name: Transform results for benchmark dashboard
         run: |
           python3 -c "
-          import json, glob
+          import json, glob, re
+          run_url = f'https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}'
           entries = []
           for f in sorted(glob.glob('*.json')):
               if f == 'regression_report.json':
@@ -484,14 +487,22 @@ jobs:
               if 'output_throughput' not in d:
                   continue
               model = d.get('model_id', '').split('/')[-1]
+              m = re.search(r'-(mtp\d*)-', f)
+              if m:
+                  model = f'{model}-{m.group(1)}'
               isl = d.get('random_input_len', 0)
               osl = d.get('random_output_len', 0)
               conc = d.get('max_concurrency', 0)
               label = f'{model} {isl}/{osl} c={conc}'
+              extra = f'Run: {run_url}'
               entries.append({'name': f'{label} throughput (tok/s)', 'unit': 'tok/s',
-                              'value': round(d['output_throughput'], 2)})
+                              'value': round(d['output_throughput'], 2), 'extra': extra})
+              entries.append({'name': f'{label} Total Tput (tok/s)', 'unit': 'tok/s',
+                              'value': round(d.get('total_token_throughput', 0), 2), 'extra': extra})
+              entries.append({'name': f'{label} TTFT (ms)', 'unit': 'ms',
+                              'value': round(d.get('mean_ttft_ms', 0), 2), 'extra': extra})
               entries.append({'name': f'{label} TPOT (ms)', 'unit': 'ms',
-                              'value': round(d.get('mean_tpot_ms', 0), 2)})
+                              'value': round(d.get('mean_tpot_ms', 0), 2), 'extra': extra})
           json.dump(entries, open('benchmark-action-input.json', 'w'), indent=2)
           print(f'Generated {len(entries)} entries for benchmark dashboard')
           "
@@ -503,12 +514,28 @@ jobs:
           output-file-path: benchmark-action-input.json
           gh-pages-branch: gh-pages
           benchmark-data-dir-path: benchmark-dashboard
-          auto-push: true
+          auto-push: false
           alert-threshold: "80%"
           comment-on-alert: true
           fail-on-alert: false
           max-items-in-chart: 90
           github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Deploy custom dashboard to gh-pages
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          CURRENT_SHA=$(git rev-parse HEAD)
+          # Save dashboard template before switching branches
+          cp .github/dashboard/index.html /tmp/dashboard_index.html
+          git fetch origin gh-pages
+          git checkout gh-pages
+          # Replace auto-generated index.html with custom dashboard
+          cp /tmp/dashboard_index.html benchmark-dashboard/index.html
+          git add benchmark-dashboard/
+          git diff --cached --quiet || git commit -m "Update benchmark data and dashboard"
+          git push origin gh-pages
+          git checkout "$CURRENT_SHA"
 
   regression-analysis:
     if: always() && needs.summarize-benchmark-result.outputs.has_regression == 'true'
@@ -557,7 +584,8 @@ jobs:
             -e HF_TOKEN="${HF_TOKEN:-}" \
             --security-opt seccomp=unconfined \
             --ulimit memlock=-1 --ulimit stack=67108864 \
-              --name atom-regression \
+            -e ATOM_DISABLE_MMAP=true \
+            --name atom-regression \
             rocm/atom-dev:latest
         env:
           GITHUB_WORKSPACE: ${{ github.workspace }}
@@ -579,7 +607,7 @@ jobs:
             MODEL_PATH="deepseek-ai/DeepSeek-R1-0528"
           fi
 
-          # Pick the top 3 most regressed configs to limit CI time
+          # Pick the top 3 most regressed configs, grouped by variant (server args differ)
           python3 -c "
           import json, sys
           report = json.load(open('regression_report.json'))
@@ -592,36 +620,59 @@ jobs:
               -r['metrics'].get('mean_tpot_ms', {}).get('pct', 0)
           ))
           for r in regressions[:3]:
-              print(f\"Regressed: {r['model']} {r['isl']}/{r['osl']} c={r['conc']}\")
+              is_mtp = 'mtp' in r.get('model', '').lower()
+              print(f\"Regressed: {r['model']} {r['isl']}/{r['osl']} c={r['conc']} mtp={is_mtp}\")
           json.dump(regressions[:3], open('regressed_configs.json', 'w'))
           "
 
-          # Launch server once with profiler dir + mark-trace for capture_graph analysis
-          ARGS="--kv_cache_dtype fp8 -tp 8 --torch-profiler-dir /app/trace --mark-trace"
-          docker exec atom-regression bash -lc "
-            .github/scripts/atom_test.sh launch $MODEL_PATH $ARGS
-          "
+          # Group regressed configs by variant and profile each group
+          python3 << 'PYEOF'
+          import json
+          configs = json.load(open('regressed_configs.json'))
+          mtp_configs = [c for c in configs if 'mtp' in c.get('model', '').lower()]
+          non_mtp_configs = [c for c in configs if 'mtp' not in c.get('model', '').lower()]
+          groups = []
+          if non_mtp_configs:
+              groups.append({"server_args": "", "bench_args": "", "configs": non_mtp_configs})
+          if mtp_configs:
+              groups.append({"server_args": "--method mtp --num-speculative-tokens 3", "bench_args": "--use-chat-template", "configs": mtp_configs})
+          json.dump(groups, open('regression_groups.json', 'w'))
+          print(f"Groups: {len(groups)} (non-mtp: {len(non_mtp_configs)}, mtp: {len(mtp_configs)})")
+          PYEOF
 
-          # Run each regressed config with --profile (ATOM benchmark_serving handles start/stop)
+          # For each variant group: launch server, profile configs, stop server
           python3 -c "
           import json
-          for c in json.load(open('regressed_configs.json')):
-              print(f\"{c['isl']} {c['osl']} {c['conc']}\")
-          " | while read ISL OSL CONC; do
-            echo "========== Profiling ISL=$ISL OSL=$OSL CONC=$CONC =========="
-            NUM_PROMPTS=$((CONC * 5))
+          for i, g in enumerate(json.load(open('regression_groups.json'))):
+              sa = g['server_args']
+              ba = g['bench_args']
+              configs = ' '.join(f\"{c['isl']},{c['osl']},{c['conc']}\" for c in g['configs'])
+              print(f\"{sa}|{ba}|{configs}\")
+          " | while IFS='|' read SERVER_ARGS BENCH_ARGS CONFIG_LIST; do
+            echo "========== Server args: ${SERVER_ARGS:-default} =========="
+            ARGS="--kv_cache_dtype fp8 -tp 8 --torch-profiler-dir /app/trace --mark-trace ${SERVER_ARGS}"
             docker exec atom-regression bash -lc "
-              python -m atom.benchmarks.benchmark_serving \
-                --model=$MODEL_PATH --backend=vllm --base-url=http://localhost:8000 \
-                --dataset-name=random \
-                --random-input-len=$ISL --random-output-len=$OSL \
-                --random-range-ratio=0.8 \
-                --max-concurrency=$CONC \
-                --num-prompts=$NUM_PROMPTS \
-                --trust-remote-code --num-warmups=1 \
-                --request-rate=inf --ignore-eos \
-                --profile
+              pkill -f 'atom.entrypoints' 2>/dev/null; sleep 3
+              .github/scripts/atom_test.sh launch $MODEL_PATH $ARGS
             "
+
+            for cfg in $CONFIG_LIST; do
+              IFS=',' read ISL OSL CONC <<< "$cfg"
+              echo "========== Profiling ISL=$ISL OSL=$OSL CONC=$CONC =========="
+              NUM_PROMPTS=$((CONC * 2))
+              docker exec atom-regression bash -lc "
+                python -m atom.benchmarks.benchmark_serving \
+                  --model=$MODEL_PATH --backend=vllm --base-url=http://localhost:8000 \
+                  --dataset-name=random \
+                  --random-input-len=$ISL --random-output-len=$OSL \
+                  --random-range-ratio=0.8 \
+                  --max-concurrency=$CONC \
+                  --num-prompts=$NUM_PROMPTS \
+                  --trust-remote-code --num-warmups=1 \
+                  --request-rate=inf --ignore-eos \
+                  --profile $BENCH_ARGS
+              "
+            done
           done
 
           # Wait for trace gzip compression to complete

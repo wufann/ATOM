@@ -69,7 +69,7 @@ def load_results(result_dir, recursive=False):
 
     results.sort(
         key=lambda d: (
-            d.get("model_id", "").split("/")[-1],
+            _display_model(d),
             int(d.get("random_input_len", 0)),
             int(d.get("random_output_len", 0)),
             int(d.get("max_concurrency", 0)),
@@ -78,14 +78,19 @@ def load_results(result_dir, recursive=False):
     return results
 
 
-def _config_key(data):
-    """Unique identifier for matching a benchmark configuration across runs."""
+def _display_model(data):
+    """Model name with variant tag for display."""
     model = data.get("model_id", "").split("/")[-1]
     variant = data.get("_variant", "")
     if variant:
         model = f"{model}-{variant}"
+    return model
+
+
+def _config_key(data):
+    """Unique identifier for matching a benchmark configuration across runs."""
     return (
-        model,
+        _display_model(data),
         int(data.get("random_input_len", 0)),
         int(data.get("random_output_len", 0)),
         int(data.get("max_concurrency", 0)),
@@ -127,7 +132,7 @@ def print_results_table(results):
                 "%Y-%m-%d %H:%M:%S"
             ),
             "ATOM",
-            data.get("model_id", "").split("/")[-1],
+            _display_model(data),
             data.get("random_input_len", ""),
             data.get("random_output_len", ""),
             data.get("best_of", ""),
@@ -298,7 +303,7 @@ def main():
             "regressions": regressions,
             "all_results": [
                 {
-                    "model": d.get("model_id", "").split("/")[-1],
+                    "model": _display_model(d),
                     "isl": int(d.get("random_input_len", 0)),
                     "osl": int(d.get("random_output_len", 0)),
                     "conc": int(d.get("max_concurrency", 0)),
