@@ -416,10 +416,11 @@
         const points = [];
         const concLabels = [];
         for (const [conc, metrics] of Object.entries(concMap).sort((a,b) => +a[0] - +b[0])) {
-          const tput = metrics['throughput'];
+          const totalTput = metrics['Total Tput'];
           const tpot = metrics['TPOT'];
-          if (tput && tpot && tpot > 0) {
-            points.push({ x: 1000 / tpot, y: tput });
+          const gpuCount = metrics['_gpu_count'] || 8;
+          if (totalTput && tpot && tpot > 0) {
+            points.push({ x: 1000 / tpot, y: totalTput / gpuCount });
             concLabels.push(conc);
           }
         }
@@ -466,7 +467,7 @@
               label: (item) => {
                 const ds = datasets[item.datasetIndex];
                 const conc = ds._concLabels[item.index] || '?';
-                return ` c=${conc}: ${(+item.xLabel).toFixed(1)} tok/s/user, ${(+item.yLabel).toFixed(0)} tok/s`;
+                return ` c=${conc}: ${(+item.xLabel).toFixed(1)} tok/s/user, ${(+item.yLabel).toFixed(0)} tok/s/gpu`;
               }
             }
           }
