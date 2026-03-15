@@ -34,18 +34,22 @@ def parse_args():
     p.add_argument("--model-path", type=str,
                     default="/home/hatwu/models/Kimi-K2-Thinking-MXFP4-Mini-1Layer",
                     help="Path to mini model directory")
-    p.add_argument("--batch-size", type=int, default=1)
+    p.add_argument("--batch-size", type=int, default=32)
     p.add_argument("--context-len", type=int, default=128,
                     help="Simulated context length (KV cache already filled)")
     p.add_argument("--decode-steps", type=int, default=20)
     p.add_argument("--warmup", type=int, default=5)
-    p.add_argument("--tp-size", type=int, default=1)
+    p.add_argument("--tp-size", type=int, default=4)
     p.add_argument("--kv-cache-dtype", type=str, default="bf16",
                     choices=["bf16", "fp8"])
     p.add_argument("--block-size", type=int, default=16,
                     help="Logical KV cache block size")
     p.add_argument("--max-num-batched-tokens", type=int, default=4096)
     p.add_argument("--max-num-seqs", type=int, default=32)
+    p.add_argument("--profile", action="store_true",
+                    help="Enable torch profiler for decode steps")
+    p.add_argument("--profile-dir", type=str, default="./profile_traces",
+                    help="Directory to save profiler traces")
     return p.parse_args()
 
 
@@ -419,6 +423,25 @@ def main():
     decode_times = []
     cur_context = context_len + args.warmup
 
+    profiler_ctx = None
+    if args.profile:
+        os.makedirs(args.profile_dir, exist_ok=True)
+        if is_main:
+            print(f"  Profiler enabled, traces will be saved to: {args.profile_dir}")
+        profiler_ctx = torch.profiler.profile(
+            activities=[
+                torch.profiler.ProfilerActivity.CPU,
+                torch.profiler.ProfilerActivity.CUDA,
+            ],
+            schedule=torch.profiler.schedule(
+                wait=1, warmup=1, active=args.decode_steps - 2, repeat=1,
+            ),
+            on_trace_ready=torch.profiler.tensorboard_trace_handler(args.profile_dir),
+            record_shapes=True,
+            with_stack=True,
+        )
+        profiler_ctx.__enter__()
+
     for step in range(args.decode_steps):
         cur_context_step = cur_context + step
         context_lens_np_cur = np.full(bs, cur_context_step, dtype=np.int32)
@@ -440,6 +463,14 @@ def main():
         decode_times.append(t_step)
         if is_main:
             print(f"  Step {step+1:3d}: {t_step * 1000:.2f} ms")
+
+        if profiler_ctx is not None:
+            profiler_ctx.step()
+
+    if profiler_ctx is not None:
+        profiler_ctx.__exit__(None, None, None)
+        if is_main:
+            print(f"  Profiler traces saved to: {args.profile_dir}")
 
     # --- Results ---
     if is_main:
