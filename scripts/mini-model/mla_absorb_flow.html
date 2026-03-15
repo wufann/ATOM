@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kimi-K2 MLA Decode Absorb Flow</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0a0e17;
+  --surface: #131a2b;
+  --surface2: #1a2340;
+  --border: #2a3555;
+  --text: #e0e6f0;
+  --text-dim: #7a8baa;
+  --accent-blue: #4a9eff;
+  --accent-cyan: #00d4aa;
+  --accent-orange: #ff8c42;
+  --accent-purple: #b47aff;
+  --accent-pink: #ff6b9d;
+  --accent-yellow: #ffd666;
+  --accent-red: #ff5555;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Space Grotesk', sans-serif;
+  min-height: 100vh;
+  padding: 30px 20px;
+}
+
+h1 {
+  text-align: center;
+  font-size: 1.6rem;
+  font-weight: 700;
+  margin-bottom: 6px;
+  background: linear-gradient(135deg, var(--accent-blue), var(--accent-cyan));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.subtitle {
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  margin-bottom: 30px;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.flow-container { max-width: 1000px; margin: 0 auto; }
+
+.tp-toggle {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.tp-btn {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 6px 18px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tp-btn.active {
+  background: rgba(74, 158, 255, 0.15);
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
+}
+
+.tp-btn:hover:not(.active) {
+  border-color: var(--text-dim);
+  color: var(--text);
+}
+
+.phase-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+  padding-left: 4px;
+}
+
+.step { margin-bottom: 4px; }
+
+.connector {
+  display: flex;
+  justify-content: center;
+  height: 28px;
+}
+
+.connector svg { width: 40px; height: 28px; }
+.connector .al { stroke: var(--accent-blue); stroke-width: 2; opacity: 0.5; }
+.connector .ah { fill: var(--accent-blue); opacity: 0.5; }
+
+.node {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.node:hover {
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 20px rgba(74, 158, 255, 0.1);
+  transform: translateY(-1px);
+}
+
+.node::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 4px;
+  border-radius: 10px 0 0 10px;
+}
+
+.node.std::before { background: var(--accent-blue); }
+.node.bat::before { background: var(--accent-purple); }
+.node.att::before { background: var(--accent-cyan); }
+.node.dec::before { background: var(--accent-orange); }
+.node.elim::before { background: var(--accent-red); }
+
+.icon {
+  width: 42px; height: 42px;
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.1rem; font-weight: 700; flex-shrink: 0;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.node.std .icon { background: rgba(74,158,255,0.15); color: var(--accent-blue); }
+.node.bat .icon { background: rgba(180,122,255,0.15); color: var(--accent-purple); }
+.node.att .icon { background: rgba(0,212,170,0.15); color: var(--accent-cyan); }
+.node.dec .icon { background: rgba(255,140,66,0.15); color: var(--accent-orange); }
+.node.elim .icon { background: rgba(255,85,85,0.15); color: var(--accent-red); }
+
+.info { flex: 1; min-width: 0; }
+
+.title {
+  font-weight: 600; font-size: 0.95rem;
+  margin-bottom: 3px;
+  display: flex; align-items: center; gap: 8px;
+}
+
+.tag {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.6rem; font-weight: 600;
+  padding: 2px 6px; border-radius: 4px;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+
+.t-std { background: rgba(74,158,255,0.2); color: var(--accent-blue); }
+.t-bat { background: rgba(180,122,255,0.2); color: var(--accent-purple); }
+.t-att { background: rgba(0,212,170,0.2); color: var(--accent-cyan); }
+.t-dec { background: rgba(255,140,66,0.2); color: var(--accent-orange); }
+.t-elim { background: rgba(255,85,85,0.2); color: var(--accent-red); }
+
+.desc {
+  font-size: 0.78rem; color: var(--text-dim);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.shapes {
+  display: flex; flex-direction: column;
+  gap: 4px; flex-shrink: 0; align-items: flex-end;
+}
+
+.sb {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.72rem; font-weight: 600;
+  padding: 3px 10px; border-radius: 6px; white-space: nowrap;
+}
+
+.si { background: rgba(74,158,255,0.12); color: var(--accent-blue); }
+.sw { background: rgba(255,214,102,0.12); color: var(--accent-yellow); }
+.so { background: rgba(0,212,170,0.12); color: var(--accent-cyan); }
+
+.divider {
+  border: none;
+  border-top: 1px dashed var(--border);
+  margin: 16px 0 10px;
+}
+
+.elim-node {
+  opacity: 0.35;
+  position: relative;
+}
+
+.elim-overlay {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.82rem; font-weight: 700;
+  color: var(--accent-red);
+  background: rgba(255,85,85,0.12);
+  padding: 4px 14px; border-radius: 4px;
+  border: 1px solid rgba(255,85,85,0.35);
+  z-index: 10;
+  white-space: nowrap;
+}
+
+.legend {
+  display: flex; gap: 20px; justify-content: center; flex-wrap: wrap;
+  margin-top: 24px; padding: 14px;
+  background: var(--surface); border-radius: 10px; border: 1px solid var(--border);
+}
+
+.legend-item {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 0.75rem; color: var(--text-dim);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.legend-dot { width: 10px; height: 10px; border-radius: 3px; }
+
+.note {
+  margin-top: 16px; padding: 12px 16px;
+  background: rgba(255,140,66,0.08);
+  border: 1px solid rgba(255,140,66,0.2);
+  border-radius: 8px;
+  font-size: 0.78rem; color: var(--text-dim);
+  font-family: 'JetBrains Mono', monospace;
+  line-height: 1.7;
+}
+
+.note strong { color: var(--accent-orange); }
+.note code { color: var(--accent-cyan); background: rgba(0,212,170,0.08); padding: 1px 4px; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<h1>Kimi-K2 MLA Decode: Weight Absorption Data Flow</h1>
+<p class="subtitle">kv_b_proj decomposed into W_K / W_V → absorbed into batched GEMMs</p>
+
+<div class="tp-toggle">
+  <button class="tp-btn active" onclick="setTP(4)">TP = 4 &nbsp;(16 heads)</button>
+  <button class="tp-btn" onclick="setTP(8)">TP = 8 &nbsp;(8 heads)</button>
+  <button class="tp-btn" onclick="setTP(1)">No TP &nbsp;(64 heads)</button>
+</div>
+
+<div class="flow-container" id="flow"></div>
+
+<script>
+const C = {
+  1:  { N: 64, qb_n: 12288, kvb_n: 16384, o_k: 8192 },
+  4:  { N: 16, qb_n: 3072,  kvb_n: 4096,  o_k: 2048 },
+  8:  { N: 8,  qb_n: 1536,  kvb_n: 2048,  o_k: 1024 },
+};
+
+let tp = 4;
+
+function setTP(v) {
+  tp = v;
+  document.querySelectorAll('.tp-btn').forEach(b =>
+    b.classList.toggle('active', b.textContent.includes(v === 1 ? 'No TP' : `TP = ${v}`))
+  );
+  render();
+}
+
+function arrow() {
+  return `<div class="connector"><svg><line class="al" x1="20" y1="0" x2="20" y2="20"/><polygon class="ah" points="14,18 20,28 26,18"/></svg></div>`;
+}
+
+function node(cls, icon, title, tags, desc, shapes) {
+  const tagHtml = tags.map(([t,c]) => `<span class="tag ${c}">${t}</span>`).join('');
+  const shapeHtml = shapes.map(([label,cls2]) => `<span class="sb ${cls2}">${label}</span>`).join('');
+  return `<div class="step"><div class="node ${cls}">
+    <div class="icon">${icon}</div>
+    <div class="info">
+      <div class="title">${title} ${tagHtml}</div>
+      <div class="desc">${desc}</div>
+    </div>
+    <div class="shapes">${shapeHtml}</div>
+  </div></div>`;
+}
+
+function render() {
+  const c = C[tp];
+  const N = c.N;
+  const NxV = N * 128;
+  const NxQK = N * 192;
+
+  let h = '';
+
+  // Phase 1
+  h += `<div class="phase-label">Phase 1 — Input Projection</div>`;
+  h += node('std', '1', 'fused_qkv_a_proj',
+    [['Standard GEMM','t-std'], ['Replicated','t-dec']],
+    'hidden → [q_compressed, kv_compressed, k_rope]',
+    [['in: (M, 7168)','si'], ['W: (2112, 7168)','sw'], ['out: (M, 2112)','so']]);
+  h += arrow();
+
+  h += node('dec', '÷', 'Split fused output',
+    [['Slice','t-dec']],
+    'split dim=-1 → q_compressed | kv_compressed | k_rope',
+    [['q_c: (M, 1536)','so'], ['kv_c: (M, 512)','so'], ['k_pe: (M, 64)','so']]);
+  h += arrow();
+
+  // Phase 2
+  h += `<hr class="divider"><div class="phase-label">Phase 2 — Q Projection + K Absorption</div>`;
+  h += node('std', '2', 'q_b_proj',
+    [['Standard GEMM','t-std'], ['ColumnParallel','t-dec']],
+    'q_compressed → q, reshape to per-head, split nope/rope',
+    [['in: (M, 1536)','si'], [`W: (${c.qb_n}, 1536)`,'sw'], [`q_nope: (${N}, M, 128)`,'so']]);
+  h += arrow();
+
+  h += node('bat', '3', 'q_nope @ W_K',
+    [['Batched GEMM','t-bat'], ['Absorb K','t-dec']],
+    `q_nope × W_UK^T → q_absorbed (project to latent space, ${N} heads)`,
+    [[`in: (${N}, M, 128)`,'si'], [`W_K: (${N}, 128, 512)`,'sw'], [`out: (${N}, M, 512)`,'so']]);
+  h += arrow();
+
+  h += node('dec', '⊕', 'Concat q_absorbed ‖ q_rope + RoPE',
+    [['Fused Cat+RoPE+Cache','t-dec']],
+    'fused_qk_rope_concat_and_cache_mla: apply RoPE, concat, update KV cache',
+    [[`q: (M, ${N}, 576)`,'so']]);
+  h += arrow();
+
+  // Eliminated kv_b_proj
+  h += `<hr class="divider">`;
+  h += `<div style="position:relative;margin-bottom:4px">
+    <div class="step elim-node"><div class="node elim">
+      <div class="icon">✕</div>
+      <div class="info">
+        <div class="title">kv_b_proj <span class="tag t-elim">Eliminated</span></div>
+        <div class="desc">kv_compressed → k_nope, v (no longer computed at runtime)</div>
+      </div>
+      <div class="shapes">
+        <span class="sb sw">W: (${c.kvb_n}, 512)</span>
+      </div>
+    </div></div>
+    <div class="elim-overlay">ABSORBED INTO W_K & W_V at load time</div>
+  </div>`;
+
+  // Phase 3
+  h += `<hr class="divider"><div class="phase-label">Phase 3 — MLA Decode Attention (Latent Space, dim=576)</div>`;
+  h += node('att', '4', 'MLA Decode Attention',
+    [['Attention Kernel','t-att']],
+    `q @ KV_cache^T → softmax → @ KV_cache → output (latent space, ${N} heads)`,
+    [[`q: (M, ${N}, 576)`,'si'], ['KV cache: (seq, 1, 576)','sw'], [`out: (M, ${N}, 512)`,'so']]);
+  h += arrow();
+
+  // Phase 4
+  h += `<hr class="divider"><div class="phase-label">Phase 4 — V Absorption + Output Projection</div>`;
+  h += node('bat', '5', 'attn_out @ W_V',
+    [['Batched GEMM','t-bat'], ['Absorb V','t-dec']],
+    `attn_output × W_UV^T → v_output (latent → head dim, ${N} heads)`,
+    [[`in: (${N}, M, 512)`,'si'], [`W_V: (${N}, 512, 128)`,'sw'], [`out: (${N}, M, 128)`,'so']]);
+  h += arrow();
+
+  h += node('dec', '≡', 'Reshape + Flatten',
+    [['View','t-dec']],
+    `(${N}, M, 128) → (M, ${N} × 128) = (M, ${NxV})`,
+    [[`out: (M, ${NxV})`,'so']]);
+  h += arrow();
+
+  h += node('std', '6', 'o_proj',
+    [['Standard GEMM','t-std'], ['RowParallel + AllReduce','t-dec']],
+    'v_output → hidden',
+    [[`in: (M, ${c.o_k})`,'si'], [`W: (7168, ${c.o_k})`,'sw'], ['out: (M, 7168)','so']]);
+
+  // Legend
+  h += `<div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:var(--accent-blue)"></div> Standard GEMM (BF16)</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--accent-purple)"></div> Batched GEMM (FP8/MXFP4)</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--accent-cyan)"></div> Attention Kernel</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--accent-orange)"></div> Slice / Concat / Reshape</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--accent-red)"></div> Eliminated (absorbed)</div>
+  </div>`;
+
+  // Note
+  h += `<div class="note">
+    <strong>Key insight:</strong> The original <code>kv_b_proj</code> GEMM (M × ${c.kvb_n} × 512) is <strong>completely eliminated</strong> at decode time.<br>
+    Its weight is decomposed offline into W_UK and W_UV during <code>process_weights_after_loading()</code>:<br><br>
+    &bull; <strong>W_K</strong> (K absorption): per-head <code>(128, 512)</code> — applied to q_nope <em>before</em> attention<br>
+    &bull; <strong>W_V</strong> (V absorption): per-head <code>(512, 128)</code> — applied to attn_output <em>after</em> attention<br><br>
+    Attention operates in the compressed <strong>latent space</strong> (dim = <code>kv_lora_rank(512) + qk_rope_head_dim(64) = 576</code>),<br>
+    not the full head dimension. KV cache stores only 576-dim vectors per token (vs 256 in standard MHA).
+  </div>`;
+
+  document.getElementById('flow').innerHTML = h;
+}
+
+render();
+</script>
+</body>
+</html>

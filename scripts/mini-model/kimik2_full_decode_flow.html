@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kimi-K2 Full Decode Layer Flow</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0a0e17;
+  --surface: #131a2b;
+  --surface2: #1a2340;
+  --border: #2a3555;
+  --text: #e0e6f0;
+  --text-dim: #7a8baa;
+  --blue: #4a9eff;
+  --cyan: #00d4aa;
+  --orange: #ff8c42;
+  --purple: #b47aff;
+  --pink: #ff6b9d;
+  --yellow: #ffd666;
+  --red: #ff5555;
+  --green: #50fa7b;
+  --teal: #00b4d8;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:var(--bg); color:var(--text); font-family:'Space Grotesk',sans-serif; padding:24px 16px; }
+h1 { text-align:center; font-size:1.5rem; font-weight:700; margin-bottom:4px;
+  background:linear-gradient(135deg,var(--blue),var(--cyan)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+.sub { text-align:center; color:var(--text-dim); font-size:0.8rem; margin-bottom:20px; font-family:'JetBrains Mono',monospace; }
+.controls { display:flex; justify-content:center; gap:8px; margin-bottom:20px; flex-wrap:wrap; }
+.btn { font-family:'JetBrains Mono',monospace; font-size:0.75rem; font-weight:600;
+  padding:5px 14px; border-radius:5px; border:1px solid var(--border);
+  background:var(--surface); color:var(--text-dim); cursor:pointer; transition:all .2s; }
+.btn.active { background:rgba(74,158,255,.15); border-color:var(--blue); color:var(--blue); }
+.btn:hover:not(.active) { border-color:var(--text-dim); color:var(--text); }
+.btn-group { display:flex; gap:4px; align-items:center; }
+.btn-label { font-family:'JetBrains Mono',monospace; font-size:0.65rem; color:var(--text-dim); margin-right:4px; }
+.wrap { max-width:1100px; margin:0 auto; display:flex; flex-direction:column; gap:0; }
+
+/* Section headers */
+.sec { font-size:0.82rem; font-weight:600; margin:16px 0 8px; padding:8px 14px;
+  border-radius:8px; display:flex; align-items:center; gap:10px; }
+.sec-attn { background:rgba(74,158,255,.08); border-left:3px solid var(--blue); }
+.sec-moe { background:rgba(180,122,255,.08); border-left:3px solid var(--purple); }
+.sec-shared { background:rgba(0,212,170,.08); border-left:3px solid var(--cyan); }
+.sec-merge { background:rgba(255,140,66,.08); border-left:3px solid var(--orange); }
+.sec-tag { font-family:'JetBrains Mono',monospace; font-size:0.6rem; padding:2px 6px;
+  border-radius:3px; font-weight:600; }
+.sec-tag-attn { background:rgba(74,158,255,.15); color:var(--blue); }
+.sec-tag-moe { background:rgba(180,122,255,.15); color:var(--purple); }
+.sec-tag-shared { background:rgba(0,212,170,.15); color:var(--cyan); }
+
+/* Phase label */
+.ph { font-family:'JetBrains Mono',monospace; font-size:0.65rem; font-weight:600;
+  text-transform:uppercase; letter-spacing:.1em; color:var(--text-dim); margin:4px 0 6px 4px; }
+
+/* Nodes */
+.step { margin-bottom:3px; }
+.nd { background:var(--surface); border:1px solid var(--border); border-radius:9px;
+  padding:11px 14px; display:flex; align-items:center; gap:14px;
+  transition:all .2s; position:relative; overflow:hidden; }
+.nd:hover { border-color:var(--blue); box-shadow:0 0 16px rgba(74,158,255,.08); transform:translateY(-1px); }
+.nd::before { content:''; position:absolute; left:0; top:0; bottom:0; width:3px; border-radius:9px 0 0 9px; }
+.nd.c-blue::before { background:var(--blue); }
+.nd.c-purple::before { background:var(--purple); }
+.nd.c-cyan::before { background:var(--cyan); }
+.nd.c-orange::before { background:var(--orange); }
+.nd.c-pink::before { background:var(--pink); }
+.nd.c-red::before { background:var(--red); }
+.nd.c-green::before { background:var(--green); }
+.nd.c-teal::before { background:var(--teal); }
+.nd.c-yellow::before { background:var(--yellow); }
+
+.ic { width:36px; height:36px; border-radius:7px; display:flex; align-items:center;
+  justify-content:center; font-size:0.95rem; font-weight:700; flex-shrink:0;
+  font-family:'JetBrains Mono',monospace; }
+.nd.c-blue .ic { background:rgba(74,158,255,.12); color:var(--blue); }
+.nd.c-purple .ic { background:rgba(180,122,255,.12); color:var(--purple); }
+.nd.c-cyan .ic { background:rgba(0,212,170,.12); color:var(--cyan); }
+.nd.c-orange .ic { background:rgba(255,140,66,.12); color:var(--orange); }
+.nd.c-pink .ic { background:rgba(255,107,157,.12); color:var(--pink); }
+.nd.c-red .ic { background:rgba(255,85,85,.12); color:var(--red); }
+.nd.c-green .ic { background:rgba(80,250,123,.12); color:var(--green); }
+.nd.c-teal .ic { background:rgba(0,180,216,.12); color:var(--teal); }
+.nd.c-yellow .ic { background:rgba(255,214,102,.12); color:var(--yellow); }
+
+.nf { flex:1; min-width:0; }
+.nt { font-weight:600; font-size:0.88rem; margin-bottom:2px; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+.tg { font-family:'JetBrains Mono',monospace; font-size:0.55rem; font-weight:600;
+  padding:2px 5px; border-radius:3px; text-transform:uppercase; letter-spacing:.04em; }
+.tg-std { background:rgba(74,158,255,.18); color:var(--blue); }
+.tg-bat { background:rgba(180,122,255,.18); color:var(--purple); }
+.tg-att { background:rgba(0,212,170,.18); color:var(--cyan); }
+.tg-op { background:rgba(255,140,66,.18); color:var(--orange); }
+.tg-elim { background:rgba(255,85,85,.18); color:var(--red); }
+.tg-fused { background:rgba(80,250,123,.18); color:var(--green); }
+.tg-mxfp4 { background:rgba(255,214,102,.18); color:var(--yellow); }
+.nd-desc { font-size:0.72rem; color:var(--text-dim); font-family:'JetBrains Mono',monospace; }
+
+.shapes { display:flex; flex-direction:column; gap:3px; flex-shrink:0; align-items:flex-end; }
+.sb { font-family:'JetBrains Mono',monospace; font-size:0.67rem; font-weight:600;
+  padding:2px 8px; border-radius:5px; white-space:nowrap; }
+.si { background:rgba(74,158,255,.1); color:var(--blue); }
+.sw { background:rgba(255,214,102,.1); color:var(--yellow); }
+.so { background:rgba(0,212,170,.1); color:var(--cyan); }
+.sp { background:rgba(180,122,255,.1); color:var(--purple); }
+
+/* Arrow */
+.ar { display:flex; justify-content:center; height:22px; }
+.ar svg { width:30px; height:22px; }
+.al { stroke:var(--blue); stroke-width:1.5; opacity:.4; }
+.ah { fill:var(--blue); opacity:.4; }
+
+/* Parallel container */
+.parallel { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:3px; position:relative; }
+.parallel::before { content:'PARALLEL'; position:absolute; top:-14px; left:50%; transform:translateX(-50%);
+  font-family:'JetBrains Mono',monospace; font-size:0.55rem; font-weight:600;
+  color:var(--green); background:rgba(80,250,123,.1); padding:1px 8px; border-radius:3px;
+  border:1px solid rgba(80,250,123,.2); z-index:5; }
+.par-col { display:flex; flex-direction:column; gap:3px; }
+
+.divider { border:none; border-top:1px dashed var(--border); margin:12px 0 8px; }
+
+/* Eliminated */
+.elim-wrap { position:relative; margin-bottom:3px; }
+.elim-wrap .nd { opacity:.3; }
+.elim-ov { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+  font-family:'JetBrains Mono',monospace; font-size:0.75rem; font-weight:700;
+  color:var(--red); background:rgba(255,85,85,.1); padding:3px 12px; border-radius:4px;
+  border:1px solid rgba(255,85,85,.3); z-index:10; white-space:nowrap; }
+
+/* Legend */
+.legend { display:flex; gap:16px; justify-content:center; flex-wrap:wrap;
+  margin-top:20px; padding:12px; background:var(--surface); border-radius:9px; border:1px solid var(--border); }
+.li { display:flex; align-items:center; gap:5px; font-size:0.68rem; color:var(--text-dim);
+  font-family:'JetBrains Mono',monospace; }
+.ld { width:9px; height:9px; border-radius:2px; }
+
+.note { margin-top:14px; padding:10px 14px; background:rgba(74,158,255,.06);
+  border:1px solid rgba(74,158,255,.15); border-radius:7px;
+  font-size:0.72rem; color:var(--text-dim); font-family:'JetBrains Mono',monospace; line-height:1.6; }
+.note strong { color:var(--blue); }
+.note code { color:var(--cyan); background:rgba(0,212,170,.06); padding:0 3px; border-radius:2px; }
+</style>
+</head>
+<body>
+
+<h1>Kimi-K2 Full Decode Layer: Data Flow with Shapes</h1>
+<p class="sub">Attention (MLA Absorb) + Router + Shared Expert + Routed MoE + Merge</p>
+
+<div class="controls">
+  <div class="btn-group">
+    <span class="btn-label">TP:</span>
+    <button class="btn active" onclick="setTP(4)">TP=4</button>
+    <button class="btn" onclick="setTP(8)">TP=8</button>
+    <button class="btn" onclick="setTP(1)">No TP</button>
+  </div>
+  <div class="btn-group">
+    <span class="btn-label">MoE:</span>
+    <button class="btn active" onclick="setEP(true)">EP mode</button>
+    <button class="btn" onclick="setEP(false)">TP mode</button>
+  </div>
+</div>
+
+<div class="wrap" id="flow"></div>
+
+<script>
+const P = {
+  1:  { N:64, qb:12288, kvb:16384, ok:8192, se_gu:4096, se_d_k:2048, ep_exp:384, tp_moe_gu:4096, tp_moe_d_k:2048 },
+  4:  { N:16, qb:3072,  kvb:4096,  ok:2048, se_gu:1024, se_d_k:512,  ep_exp:96,  tp_moe_gu:1024, tp_moe_d_k:512 },
+  8:  { N:8,  qb:1536,  kvb:2048,  ok:1024, se_gu:512,  se_d_k:256,  ep_exp:48,  tp_moe_gu:512,  tp_moe_d_k:256 },
+};
+
+let tp=4, ep=true;
+
+function setTP(v){
+  tp=v;
+  document.querySelectorAll('.btn-group')[0].querySelectorAll('.btn').forEach(b=>
+    b.classList.toggle('active', b.textContent===`TP=${v}` || (v===1 && b.textContent==='No TP')));
+  render();
+}
+function setEP(v){
+  ep=v;
+  document.querySelectorAll('.btn-group')[1].querySelectorAll('.btn').forEach(b=>
+    b.classList.toggle('active', (v && b.textContent==='EP mode') || (!v && b.textContent==='TP mode')));
+  render();
+}
+
+function A(){ return `<div class="ar"><svg><line class="al" x1="15" y1="0" x2="15" y2="16"/><polygon class="ah" points="10,14 15,22 20,14"/></svg></div>`; }
+
+function N(c,icon,title,tags,desc,shapes){
+  return `<div class="step"><div class="nd c-${c}"><div class="ic">${icon}</div><div class="nf">
+    <div class="nt">${title} ${tags.map(([t,cl])=>`<span class="tg ${cl}">${t}</span>`).join('')}</div>
+    <div class="nd-desc">${desc}</div></div>
+    <div class="shapes">${shapes.map(([l,cl])=>`<span class="sb ${cl}">${l}</span>`).join('')}</div></div></div>`;
+}
+
+function render(){
+  const c=P[tp];
+  const N_=c.N, NxV=N_*128;
+  const moe_gu = ep ? 4096 : c.tp_moe_gu;
+  const moe_dk = ep ? 2048 : c.tp_moe_d_k;
+  const n_exp = ep ? c.ep_exp : 384;
+  const moe_mode = ep ? 'EP' : 'TP';
+
+  let h='';
+
+  // ========== SECTION: ATTENTION ==========
+  h+=`<div class="sec sec-attn">Attention (MLA with Absorb) <span class="sec-tag sec-tag-attn">kv_b_proj eliminated</span></div>`;
+
+  h+=`<div class="ph">Input → Q/KV Projection</div>`;
+  h+=N('blue','1','fused_qkv_a_proj',[['GEMM','tg-std'],['Replicated','tg-op']],
+    'hidden → [q_compressed, kv_compressed, k_rope]',
+    [['in: (M, 7168)','si'],['W: (2112, 7168)','sw'],['out: (M, 2112)','so']]);
+  h+=A();
+  h+=N('orange','÷','Split',[['Slice','tg-op']],
+    '→ q_c | kv_c | k_pe',
+    [['q_c: (M, 1536)','so'],['kv_c: (M, 512)','so'],['k_pe: (M, 64)','so']]);
+  h+=A();
+
+  h+=`<div class="ph">Q Projection + K Absorption</div>`;
+  h+=N('blue','2','q_b_proj',[['GEMM','tg-std'],['ColParallel','tg-op']],
+    'q_compressed → q, reshape per-head, split nope/rope',
+    [['in: (M, 1536)','si'],[`W: (${c.qb}, 1536)`,'sw'],[`q_nope: (${N_}, M, 128)`,'so']]);
+  h+=A();
+  h+=N('purple','3','q_nope @ W_K',[['Batched GEMM','tg-bat'],['Absorb K','tg-op']],
+    `q_nope × W_UK^T → q_absorbed (${N_} heads)`,
+    [[`in: (${N_}, M, 128)`,'si'],[`W_K: (${N_}, 128, 512)`,'sw'],[`out: (${N_}, M, 512)`,'so']]);
+  h+=A();
+  h+=N('orange','⊕','Fused QK-RoPE-Cache',[['Fused Kernel','tg-fused']],
+    'apply RoPE, concat q_absorbed‖q_rope, update KV cache',
+    [[`q: (M, ${N_}, 576)`,'so']]);
+  h+=A();
+
+  // Eliminated kv_b_proj
+  h+=`<div class="elim-wrap"><div class="step"><div class="nd c-red"><div class="ic">✕</div><div class="nf">
+    <div class="nt">kv_b_proj <span class="tg tg-elim">Eliminated</span></div>
+    <div class="nd-desc">absorbed into W_K & W_V at load time</div></div>
+    <div class="shapes"><span class="sb sw">was: (${c.kvb}, 512)</span></div></div></div>
+    <div class="elim-ov">ABSORBED → W_K + W_V</div></div>`;
+  h+=A();
+
+  h+=`<div class="ph">MLA Decode Attention (Latent Space dim=576)</div>`;
+  h+=N('cyan','4','MLA Decode Attention',[['Attention','tg-att']],
+    `q @ KV^T → softmax → @ KV → output (${N_} heads, latent)`,
+    [[`q: (M, ${N_}, 576)`,'si'],['KV: (seq, 1, 576)','sw'],[`out: (M, ${N_}, 512)`,'so']]);
+  h+=A();
+
+  h+=`<div class="ph">V Absorption + Output Projection</div>`;
+  h+=N('purple','5','attn_out @ W_V',[['Batched GEMM','tg-bat'],['Absorb V','tg-op']],
+    `attn_output × W_UV^T → v (${N_} heads)`,
+    [[`in: (${N_}, M, 512)`,'si'],[`W_V: (${N_}, 512, 128)`,'sw'],[`out: (${N_}, M, 128)`,'so']]);
+  h+=A();
+  h+=N('orange','≡','Flatten',[['View','tg-op']],
+    `(${N_}, M, 128) → (M, ${NxV})`,
+    [[`out: (M, ${NxV})`,'so']]);
+  h+=A();
+  h+=N('blue','6','o_proj',[['GEMM','tg-std'],['RowParallel','tg-op']],
+    'v_output → hidden + AllReduce',
+    [[`in: (M, ${c.ok})`,'si'],[`W: (7168, ${c.ok})`,'sw'],['out: (M, 7168)','so']]);
+
+  h+=`<div class="ph" style="margin-top:8px">↓ attn_output: (M, 7168) → residual add → RMSNorm → MoE input</div>`;
+
+  // ========== SECTION: MoE ==========
+  h+=`<hr class="divider">`;
+  h+=`<div class="sec sec-moe">MoE Layer <span class="sec-tag sec-tag-moe">${moe_mode} mode · ${n_exp} experts/rank · top-8</span></div>`;
+
+  h+=`<div class="ph">Router</div>`;
+  h+=N('teal','7','gate (MoE Router)',[['GEMM','tg-std'],['Replicated','tg-op']],
+    'hidden → router logits (384 experts) → sigmoid → topK=8',
+    [['in: (M, 7168)','si'],['W: (384, 7168)','sw'],['logits: (M, 384)','so']]);
+  h+=A();
+  h+=N('orange','σ','TopK Routing',[['Grouped TopK','tg-op']],
+    'sigmoid scoring → noaux_tc → select top-8 experts per token',
+    [['topk_idx: (M, 8)','so'],['topk_weight: (M, 8)','so']]);
+  h+=A();
+
+  // Parallel: shared expert + routed experts
+  h+=`<div style="margin:14px 0 3px"><div class="parallel">`;
+
+  // Left: Shared Expert
+  h+=`<div class="par-col">
+    <div class="sec sec-shared" style="margin:0 0 6px">Shared Expert <span class="sec-tag sec-tag-shared">BF16</span></div>`;
+  h+=N('cyan','S1','shared.gate_up_proj',[['GEMM','tg-std'],['ColParallel','tg-op']],
+    'hidden → gate‖up (SiLU activation)',
+    [['in: (M, 7168)','si'],[`W: (${c.se_gu}, 7168)`,'sw'],[`out: (M, ${c.se_gu})`,'so']]);
+  h+=A();
+  h+=N('green','σ','SiLU + Mul',[['Activation','tg-fused']],
+    `gate(${c.se_gu/2}) × up(${c.se_gu/2})`,
+    [[`out: (M, ${c.se_gu/2})`,'so']]);
+  h+=A();
+  h+=N('cyan','S2','shared.down_proj',[['GEMM','tg-std'],['RowParallel','tg-op']],
+    'intermediate → hidden',
+    [[`in: (M, ${c.se_d_k})`,'si'],[`W: (7168, ${c.se_d_k})`,'sw'],['out: (M, 7168)','so']]);
+  h+=`</div>`;
+
+  // Right: Routed Experts (FusedMoE)
+  h+=`<div class="par-col">
+    <div class="sec sec-moe" style="margin:0 0 6px">Routed Experts <span class="sec-tag sec-tag-moe">MXFP4 · ${moe_mode}</span></div>`;
+  h+=N('purple','E1','experts.gate_up_proj',[['Fused MoE','tg-bat'],['MXFP4','tg-mxfp4']],
+    `${n_exp} experts × (gate‖up), dispatched by topK`,
+    [['in: (T, 7168)','si'],[`W: (${n_exp}, ${moe_gu}, 7168)`,'sw'],[`out: (T, ${moe_gu})`,'so']]);
+  h+=A();
+  h+=N('green','σ','SiLU + Mul',[['Activation','tg-fused']],
+    `per-expert gate(${moe_gu/2}) × up(${moe_gu/2})`,
+    [[`out: (T, ${moe_gu/2})`,'so']]);
+  h+=A();
+  h+=N('purple','E2','experts.down_proj',[['Fused MoE','tg-bat'],['MXFP4','tg-mxfp4']],
+    `${n_exp} experts × down, weighted combine`,
+    [[`in: (T, ${moe_dk})`,'si'],[`W: (${n_exp}, 7168, ${moe_dk})`,'sw'],['out: (M, 7168)','so']]);
+  h+=`</div>`;
+
+  h+=`</div></div>`;
+
+  h+=`<div class="ph" style="text-align:center;color:var(--green)">T = M × top_k = M × 8 (total dispatched tokens)</div>`;
+  h+=A();
+
+  // ========== SECTION: MERGE ==========
+  h+=`<div class="sec sec-merge">Merge + Output <span class="sec-tag" style="background:rgba(255,140,66,.15);color:var(--orange)">AllReduce</span></div>`;
+
+  h+=N('orange','×','Scale Routed Output',[['Mul','tg-op']],
+    'routed_output × routed_scaling_factor (2.827)',
+    [['in: (M, 7168)','si'],['out: (M, 7168)','so']]);
+  h+=A();
+  h+=N('orange','+','Add Shared + Routed',[['Add','tg-op']],
+    'shared_output + scaled_routed_output',
+    [['shared: (M, 7168)','si'],['routed: (M, 7168)','si'],['out: (M, 7168)','so']]);
+  h+=A();
+  if(tp>1){
+    h+=N('pink','⇄','AllReduce',[['Comm','tg-op']],
+      `TP AllReduce across ${tp} ranks`,
+      [['in: (M, 7168)','si'],['out: (M, 7168)','so']]);
+    h+=A();
+  }
+  h+=N('blue','✓','Layer Output',[['Residual Add','tg-op']],
+    'residual + moe_output → next layer input',
+    [['out: (M, 7168)','so']]);
+
+  // Legend
+  h+=`<div class="legend">
+    <div class="li"><div class="ld" style="background:var(--blue)"></div>Standard GEMM (BF16)</div>
+    <div class="li"><div class="ld" style="background:var(--purple)"></div>Batched/Fused MoE GEMM</div>
+    <div class="li"><div class="ld" style="background:var(--cyan)"></div>Attention / Shared Expert</div>
+    <div class="li"><div class="ld" style="background:var(--orange)"></div>Slice/Concat/Reshape/Merge</div>
+    <div class="li"><div class="ld" style="background:var(--green)"></div>Activation / Fused Kernel</div>
+    <div class="li"><div class="ld" style="background:var(--red)"></div>Eliminated (absorbed)</div>
+    <div class="li"><div class="ld" style="background:var(--yellow)"></div>MXFP4 Quantized</div>
+  </div>`;
+
+  // Notes
+  h+=`<div class="note">
+    <strong>Model:</strong> Kimi-K2-Thinking (DeepseekV3 arch) · <code>hidden=7168</code> <code>heads=64</code> <code>experts=384</code> <code>top_k=8</code> <code>shared=1</code><br>
+    <strong>MLA Absorb:</strong> <code>kv_b_proj</code> eliminated → decomposed into W_K <code>(N,128,512)</code> + W_V <code>(N,512,128)</code> batched GEMMs<br>
+    <strong>Shared Expert:</strong> intermediate = <code>moe_intermediate_size × n_shared = 2048 × 1 = 2048</code> (BF16, ColumnParallel/RowParallel)<br>
+    <strong>Routed Expert (${moe_mode}):</strong> ${ep
+      ? `ep_size=${tp}, each rank owns <code>${n_exp}</code> full experts, per-expert weight <code>(${moe_gu}, 7168)</code> / <code>(7168, ${moe_dk})</code>`
+      : `all 384 experts on each rank, weight TP-split: <code>(${moe_gu}, 7168)</code> / <code>(7168, ${moe_dk})</code>`
+    } (MXFP4 blockscale)<br>
+    <strong>T</strong> = total dispatched tokens = M × top_k. In Fused MoE kernel, all experts run as a single grouped/batched GEMM.
+  </div>`;
+
+  document.getElementById('flow').innerHTML=h;
+}
+
+render();
+</script>
+</body>
+</html>
