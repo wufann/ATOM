@@ -183,7 +183,8 @@
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#normalization">5. Normalization</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#rmsnorm-layernorm-py">5.1 <code class="docutils literal notranslate"><span class="pre">RMSNorm</span></code> (<code class="docutils literal notranslate"><span class="pre">layernorm.py</span></code>)</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#layernorm-layernorm-py">5.2 <code class="docutils literal notranslate"><span class="pre">LayerNorm</span></code> (<code class="docutils literal notranslate"><span class="pre">layernorm.py</span></code>)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#dualrmsnorm-layernorm-py">5.2 <code class="docutils literal notranslate"><span class="pre">DualRMSNorm</span></code> (<code class="docutils literal notranslate"><span class="pre">layernorm.py</span></code>)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#layernorm-layernorm-py">5.3 <code class="docutils literal notranslate"><span class="pre">LayerNorm</span></code> (<code class="docutils literal notranslate"><span class="pre">layernorm.py</span></code>)</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#activation-functions">6. Activation Functions</a><ul>
@@ -556,37 +557,42 @@
 <td><p><code class="docutils literal notranslate"><span class="pre">rmsnorm2d_fwd</span></code>, <code class="docutils literal notranslate"><span class="pre">rmsnorm2d_fwd_with_add</span></code>, <code class="docutils literal notranslate"><span class="pre">fused_add_rmsnorm_pad</span></code></p></td>
 <td><p>RMS normalization</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">LayerNorm</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">DualRMSNorm</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">layernorm.py</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">fuse_rmsnorm_group_quant</span></code></p></td>
+<td><p>Fused dual RMSNorm + quant (MLA q/kv norms)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">LayerNorm</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">layernorm.py</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">layernorm2d_fwd</span></code>, <code class="docutils literal notranslate"><span class="pre">layernorm2d_fwd_with_add</span></code></p></td>
 <td><p>Layer normalization</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">SiluAndMul</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">SiluAndMul</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">activation.py</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">aiter.silu_and_mul</span></code></p></td>
 <td><p>SiLU gated activation</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">VocabParallelEmbedding</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">VocabParallelEmbedding</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">embed_head.py</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">F.embedding</span></code> + TP all-reduce</p></td>
 <td><p>Vocab embedding</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">ParallelLMHead</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ParallelLMHead</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">embed_head.py</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">tgemm.mm</span></code> + <code class="docutils literal notranslate"><span class="pre">tensor_model_parallel_all_gather</span></code></p></td>
 <td><p>LM output head</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">RotaryEmbedding</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">RotaryEmbedding</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">rotary_embedding.py</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">aiter.rope_cached_positions_2c_fwd_inplace</span></code></p></td>
 <td><p>Rotary position embedding</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">Sampler</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">Sampler</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">sampler.py</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">aiter.mixed_sample_outer_exponential</span></code>, <code class="docutils literal notranslate"><span class="pre">aiter.ops.triton.topk.topk</span></code>, <code class="docutils literal notranslate"><span class="pre">aiter.ops.triton.softmax.softmax</span></code></p></td>
 <td><p>Token sampling</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">RejectionSampler</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">RejectionSampler</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">rejection_sampler.py</span></code></p></td>
 <td><p>Triton <code class="docutils literal notranslate"><span class="pre">rejection_greedy_sample_kernel</span></code></p></td>
 <td><p>Speculative decoding</p></td>
@@ -1179,8 +1185,22 @@
 </pre></div>
 </div>
 </section>
+<section id="dualrmsnorm-layernorm-py">
+<h3>5.2 <code class="docutils literal notranslate"><span class="pre">DualRMSNorm</span></code> (<code class="docutils literal notranslate"><span class="pre">layernorm.py</span></code>)<a class="headerlink" href="#dualrmsnorm-layernorm-py" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">DualRMSNorm</span></code> fuses normalization of two tensors (e.g. q_c and kv_c in MLA) and quantization of the first into a single <code class="docutils literal notranslate"><span class="pre">fuse_rmsnorm_group_quant</span></code> kernel call. It references existing <code class="docutils literal notranslate"><span class="pre">RMSNorm</span></code> modules’ weights rather than creating its own, so checkpoint loading works correctly.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">DualRMSNorm</span><span class="p">(</span>
+    <span class="n">norm1</span><span class="p">:</span> <span class="n">RMSNorm</span><span class="p">,</span>          <span class="c1"># e.g. q_a_layernorm</span>
+    <span class="n">norm2</span><span class="p">:</span> <span class="n">RMSNorm</span><span class="p">,</span>          <span class="c1"># e.g. kv_a_layernorm</span>
+    <span class="n">quant_config</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">QuantizationConfig</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">transpose_scale</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">shuffle</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="c1"># forward(x1, x2) -&gt; ((x1_quant, x1_scale), x2_normed)</span>
+</pre></div>
+</div>
+</section>
 <section id="layernorm-layernorm-py">
-<h3>5.2 <code class="docutils literal notranslate"><span class="pre">LayerNorm</span></code> (<code class="docutils literal notranslate"><span class="pre">layernorm.py</span></code>)<a class="headerlink" href="#layernorm-layernorm-py" title="Link to this heading"></a></h3>
+<h3>5.3 <code class="docutils literal notranslate"><span class="pre">LayerNorm</span></code> (<code class="docutils literal notranslate"><span class="pre">layernorm.py</span></code>)<a class="headerlink" href="#layernorm-layernorm-py" title="Link to this heading"></a></h3>
 <p><code class="docutils literal notranslate"><span class="pre">LayerNorm</span></code> wraps <code class="docutils literal notranslate"><span class="pre">layernorm2d_fwd</span></code> and <code class="docutils literal notranslate"><span class="pre">layernorm2d_fwd_with_add</span></code> (with bias support):</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">LayerNorm</span><span class="p">(</span><span class="n">dim</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">eps</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1e-6</span><span class="p">)</span>
 </pre></div>
@@ -1338,57 +1358,62 @@
 <td><p><code class="docutils literal notranslate"><span class="pre">RMSNorm(fused_quant=True)</span></code> + <code class="docutils literal notranslate"><span class="pre">QuantType.per_1x32</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">fused_rms_mxfp4_quant</span></code></p></td>
 </tr>
-<tr class="row-even"><td><p>RMSNorm + add + pad</p></td>
+<tr class="row-even"><td><p>Dual RMSNorm + quant</p></td>
+<td><p>Normalize q_c + kv_c, quantize q_c</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">DualRMSNorm</span></code> (MLA, FP8/FP4)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">fuse_rmsnorm_group_quant</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>RMSNorm + add + pad</p></td>
 <td><p>Residual add, RMSNorm, output padding</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">RMSNorm(x_pad_to_multiple&gt;0)</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">fused_add_rmsnorm_pad</span></code></p></td>
 </tr>
-<tr class="row-odd"><td><p>AllReduce + RMSNorm</p></td>
+<tr class="row-even"><td><p>AllReduce + RMSNorm</p></td>
 <td><p>TP all-reduce, RMSNorm</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">RMSNorm(fused_allreduce=True)</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">tensor_model_parallel_fused_allreduce_rmsnorm</span></code></p></td>
 </tr>
-<tr class="row-even"><td><p>SiLU + mul + FP8 quant</p></td>
+<tr class="row-odd"><td><p>SiLU + mul + FP8 quant</p></td>
 <td><p>SiLU activation, multiply, FP8 quant</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">SiluAndMul(fused_quant=True)</span></code> + <code class="docutils literal notranslate"><span class="pre">x_scale</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">fused_silu_mul_fp8_per_tensor_static_quant</span></code></p></td>
 </tr>
-<tr class="row-odd"><td><p>SiLU + mul + MXFP4 quant</p></td>
+<tr class="row-even"><td><p>SiLU + mul + MXFP4 quant</p></td>
 <td><p>SiLU activation, multiply, MXFP4 quant</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">SiluAndMul(fused_quant=True)</span></code> + <code class="docutils literal notranslate"><span class="pre">QuantType.per_1x32</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">fused_reduce_act_mul_and_mxfp4_quant</span></code></p></td>
 </tr>
-<tr class="row-even"><td><p>QK norm + RoPE + cache + quant</p></td>
+<tr class="row-odd"><td><p>QK norm + RoPE + cache + quant</p></td>
 <td><p>Q/K norm, RoPE, KV cache write, optional FP8 quant, weight shuffle</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">q_norm</span></code> + <code class="docutils literal notranslate"><span class="pre">k_norm</span></code> + <code class="docutils literal notranslate"><span class="pre">rotary_emb</span></code> all present</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">fused_qk_norm_rope_cache_quant_shuffle</span></code></p></td>
 </tr>
-<tr class="row-odd"><td><p>RoPE + reshape + cache</p></td>
+<tr class="row-even"><td><p>RoPE + reshape + cache</p></td>
 <td><p>RoPE, K reshape, KV cache write</p></td>
 <td><p>Triton attention path</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">fused_qk_rope_reshape_and_cache</span></code></p></td>
 </tr>
-<tr class="row-even"><td><p>QK RoPE + MLA cache</p></td>
+<tr class="row-odd"><td><p>QK RoPE + MLA cache</p></td>
 <td><p>Q RoPE, KV concat, MLA cache write, FP8 quant</p></td>
 <td><p>MLA decode path</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">fused_qk_rope_concat_and_cache_mla</span></code></p></td>
 </tr>
-<tr class="row-odd"><td><p>GEMM + split + cat (FP4)</p></td>
+<tr class="row-even"><td><p>GEMM + split + cat (FP4)</p></td>
 <td><p>KV_b_proj GEMM, split K_nope/V, cat K_rope</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">ATOM_USE_TRITON_GEMM=True</span></code> + FP4 weights</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">fused_gemm_afp4wfp4_preshuffle_split_cat</span></code></p></td>
 </tr>
-<tr class="row-even"><td><p>GEMM + split + cat (FP8)</p></td>
+<tr class="row-odd"><td><p>GEMM + split + cat (FP8)</p></td>
 <td><p>KV_b_proj GEMM, split K_nope/V, cat K_rope</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">ATOM_USE_TRITON_GEMM=True</span></code> + FP8 weights</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">fused_gemm_a8w8_blockscale_preshuffle_split_cat</span></code></p></td>
 </tr>
-<tr class="row-odd"><td><p>FP8 BMM + RoPE + cache (MLA)</p></td>
+<tr class="row-even"><td><p>FP8 BMM + RoPE + cache (MLA)</p></td>
 <td><p>Batched FP8 BMM, RoPE, MLA KV cache write</p></td>
 <td><p>MLA decode with FP8</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">fused_fp8_bmm_rope_cat_and_cache_mla</span></code></p></td>
 </tr>
-<tr class="row-even"><td><p>FP4 BMM + RoPE + cache (MLA)</p></td>
+<tr class="row-odd"><td><p>FP4 BMM + RoPE + cache (MLA)</p></td>
 <td><p>Batched FP4 BMM, RoPE, MLA KV cache write</p></td>
 <td><p>MLA decode with MXFP4</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">fused_fp4_bmm_rope_cat_and_cache_mla</span></code></p></td>
@@ -1415,7 +1440,7 @@
 <td><p><code class="docutils literal notranslate"><span class="pre">SiluAndMul</span></code> with fused FP8/MXFP4 quantization</p></td>
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">layernorm.py</span></code></p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">RMSNorm</span></code>, <code class="docutils literal notranslate"><span class="pre">LayerNorm</span></code> with fused allreduce/quant/pad variants</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">RMSNorm</span></code>, <code class="docutils literal notranslate"><span class="pre">DualRMSNorm</span></code>, <code class="docutils literal notranslate"><span class="pre">LayerNorm</span></code> with fused allreduce/quant/pad variants; group-quant dispatch (<code class="docutils literal notranslate"><span class="pre">fuse_rmsnorm_group_quant</span></code>)</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">base_attention.py</span></code></p></td>
 <td><p>Top-level <code class="docutils literal notranslate"><span class="pre">Attention</span></code> dispatcher with custom op registration</p></td>
