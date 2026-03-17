@@ -26,6 +26,7 @@ ATOM Documentation
    distributed_guide
    compilation_cudagraph_guide
    serving_benchmarking_guide
+   plugin_guide
 
 .. toctree::
    :maxdepth: 2
