@@ -7,7 +7,7 @@ python /home/hatwu/bench_serving/benchmark_serving.py \
     --model=$MODEL --backend=vllm --base-url=http://localhost:$PORT \
     --trust-remote-code \
     --dataset-name=random \
-    --random-input-len=1 --random-output-len=100 \
+    --random-input-len=8000 --random-output-len=100 \
     --random-range-ratio 0.8 \
     --num-prompts=64 \
     --max-concurrency=32 \

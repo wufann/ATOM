@@ -2,6 +2,8 @@
 # rocm/vllm-dev:nightly_main_20260118
 
 IMAGE="docker.io/rocm/vllm-private:preview_0.17.0_rocm7.2.1RC5_build78_20260306"
+IMAGE="docker.io/rocm/vllm-dev:nightly_main_20260118"
+IMAGE="docker.io/rocm/pytorch-private:81_ubuntu24.04_py3.13_pytorch_release-2.9_rocprofiler"
 
 if ! podman image exists "$IMAGE"; then
     podman pull --storage-opt ignore_chown_errors=true "$IMAGE"
