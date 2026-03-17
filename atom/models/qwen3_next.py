@@ -341,7 +341,10 @@ class Qwen3NextAttention(nn.Module):
         prefix: str = "",
     ) -> None:
         super().__init__()
-        config = atom_config.hf_config.text_config
+        if hasattr(atom_config.hf_config, "text_config"):
+            config = atom_config.hf_config.text_config
+        else:
+            config = atom_config.hf_config
         self.atom_config = atom_config
         self.config = config
         self.prefix = prefix
@@ -496,7 +499,10 @@ class Qwen3NextGatedDeltaNet(nn.Module):
         self.tp_size = get_tensor_model_parallel_world_size()
         self.tp_rank = get_tensor_model_parallel_rank()
         self.atom_config = atom_config
-        config = atom_config.hf_config.text_config
+        if hasattr(atom_config.hf_config, "text_config"):
+            config = atom_config.hf_config.text_config
+        else:
+            config = atom_config.hf_config
         self.hidden_size = config.hidden_size
         self.num_v_heads = config.linear_num_value_heads
         self.num_k_heads = config.linear_num_key_heads
@@ -799,7 +805,10 @@ class Qwen3NextDecoderLayer(nn.Module):
     ) -> None:
         super().__init__()
 
-        config = atom_config.hf_config.text_config
+        if hasattr(atom_config.hf_config, "text_config"):
+            config = atom_config.hf_config.text_config
+        else:
+            config = atom_config.hf_config
         quant_config = atom_config.quant_config
         self.layer_type = layer_type
         self.layer_idx = extract_layer_index(prefix)

@@ -142,7 +142,6 @@ if is_vllm():
             compilation_config = get_current_vllm_config().compilation_config
             if prefix in compilation_config.static_forward_context:
                 raise ValueError(f"Duplicate layer name: {prefix}")
-            print(f"register layer {prefix} to static forward context for Mamba")
             compilation_config.static_forward_context[prefix] = self
 
         def create_qkvz_proj(
@@ -433,7 +432,6 @@ class Qwen3_5Model(Qwen3NextModel):
         )
 
         self.config = config
-        # print("config type :", config, flush=True)
 
         self.vocab_size = config.vocab_size
 
