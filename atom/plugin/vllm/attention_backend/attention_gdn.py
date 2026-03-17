@@ -6,7 +6,7 @@ import torch
 import triton
 import triton.language as tl
 from einops import rearrange
-from vllm.model_executor.layers.mamba.ops.causal_conv1d import (
+from atom.model_ops.mamba_ops.causal_conv1d import (
     causal_conv1d_fn,
     causal_conv1d_update,
 )
@@ -246,10 +246,12 @@ class GatedDeltaNet(nn.Module):
 
         # 1.1: Process the multi-query part
         if spec_sequence_masks is not None:
-            mixed_qkv_spec = causal_conv1d_update(
+            query_spec, key_spec, value_spec = causal_conv1d_update(
                 mixed_qkv_spec,
                 conv_state,
                 conv_weights,
+                self.num_k_heads * self.head_k_dim // self.tp_size,
+                self.num_v_heads * self.head_v_dim // self.tp_size,
                 self.conv1d.bias,
                 self.activation,
                 conv_state_indices=spec_state_indices_tensor[:, 0][
@@ -260,13 +262,17 @@ class GatedDeltaNet(nn.Module):
                 max_query_len=spec_state_indices_tensor.size(-1),
                 validate_data=False,
             )
+            num_tokens_spec = query_spec.shape[0]
+            query_spec = query_spec.view(1, num_tokens_spec, -1, self.head_k_dim)
+            key_spec = key_spec.view(1, num_tokens_spec, -1, self.head_k_dim)
+            value_spec = value_spec.view(1, num_tokens_spec, -1, self.head_v_dim)
 
         # 1.2: Process the remaining part
         if attn_metadata.num_prefills > 0:
             mixed_qkv_non_spec_T = mixed_qkv_non_spec.transpose(0, 1)
             # - "cache_indices" updates the conv_state cache in positions
             #   pointed to by "state_indices_tensor"
-            mixed_qkv_non_spec = causal_conv1d_fn(
+            query_non_spec, key_non_spec, value_non_spec = causal_conv1d_fn(
                 mixed_qkv_non_spec_T,
                 conv_weights,
                 self.conv1d.bias,
@@ -275,13 +281,17 @@ class GatedDeltaNet(nn.Module):
                 has_initial_state=has_initial_state,
                 cache_indices=non_spec_state_indices_tensor,
                 query_start_loc=non_spec_query_start_loc,
+                k_dim_size=self.num_k_heads * self.head_k_dim // self.tp_size,
+                v_dim_size=self.num_v_heads * self.head_v_dim // self.tp_size,
                 metadata=attn_metadata,
-            ).transpose(0, 1)
+            )
         elif attn_metadata.num_decodes > 0:
-            mixed_qkv_non_spec = causal_conv1d_update(
+            query_non_spec, key_non_spec, value_non_spec = causal_conv1d_update(
                 mixed_qkv_non_spec,
                 conv_state,
                 conv_weights,
+                self.num_k_heads * self.head_k_dim // self.tp_size,
+                self.num_v_heads * self.head_v_dim // self.tp_size,
                 self.conv1d.bias,
                 self.activation,
                 conv_state_indices=non_spec_state_indices_tensor[
@@ -292,10 +302,15 @@ class GatedDeltaNet(nn.Module):
         else:
             mixed_qkv_non_spec = None
 
-        query_spec, key_spec, value_spec = self.rearrange_mixed_qkv(mixed_qkv_spec)
-        query_non_spec, key_non_spec, value_non_spec = self.rearrange_mixed_qkv(
-            mixed_qkv_non_spec
-        )
+        if attn_metadata.num_prefills > 0 or attn_metadata.num_decodes > 0:
+            num_tokens_nonspec = query_non_spec.shape[0]
+            query_non_spec = query_non_spec.view(
+                1, num_tokens_nonspec, -1, self.head_k_dim
+            )
+            key_non_spec = key_non_spec.view(1, num_tokens_nonspec, -1, self.head_k_dim)
+            value_non_spec = value_non_spec.view(
+                1, num_tokens_nonspec, -1, self.head_v_dim
+            )
 
         if attn_metadata.num_prefills > 0:
             g, beta = fused_gdn_gating(self.A_log, a, b, self.dt_bias)
