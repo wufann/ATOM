@@ -433,8 +433,10 @@ class Qwen3_5Model(Qwen3NextModel):
         )
 
         self.config = config
-        self.config.n_shared_experts = 1
-        self.config.n_routed_experts = self.config.num_experts
+        # print("config type :", config, flush=True)
+        if isinstance(config, Qwen3_5MoeTextConfig):
+            self.config.n_shared_experts = 1
+            self.config.n_routed_experts = self.config.num_experts
 
         self.vocab_size = config.vocab_size
 
@@ -460,6 +462,7 @@ class Qwen3_5Model(Qwen3NextModel):
 
         self.norm = Qwen3_5RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
 
+    # Only moe model will use this method, so we can safely add fused expert mapping here without worrying about other models
     def get_expert_mapping(self) -> list[tuple[str, str, int, str]]:
         # Params for weights, fp8 weight scales, fp8 activation scales
         # (param_name, weight_name, expert_id, shard_id)
@@ -479,7 +482,7 @@ class Qwen3_5Model(Qwen3NextModel):
 class Qwen3_5ForCausalLMBase(nn.Module):
 
     def __init__(self, atom_config: Config, prefix: str = ""):
-        config: Qwen3_5Config = atom_config.hf_config.text_config
+        config: Qwen3_5MoeTextConfig = atom_config.hf_config.text_config
         self.atom_config = atom_config
 
         self.quant_config = atom_config.quant_config
@@ -535,10 +538,8 @@ class Qwen3_5ForCausalLM(Qwen3_5ForCausalLMBase):
 class Qwen3_5MoeForCausalLM(Qwen3_5ForCausalLMBase):
     def __init__(self, atom_config: Config, prefix: str = ""):
         super().__init__(atom_config=atom_config, prefix=prefix)
-        config: Qwen3_5TextConfig = atom_config.hf_config.text_config
+        config: Qwen3_5MoeTextConfig = atom_config.hf_config.text_config
         self.config = config
-        self.config.n_shared_experts = 1
-        self.config.n_routed_experts = self.config.num_experts
         # set MoE hyperparameters
 
     def get_expert_mapping(self) -> list[tuple[str, str, int, str]]:
@@ -710,6 +711,90 @@ if is_vllm():
                 self.language_model.make_empty_intermediate_tensors
             )
 
+        def detect_fused_expert_format(self, weight_name: str) -> bool:
+            """Detect if weight is from fused expert checkpoint (BF16 format)."""
+            # Qwen3.5 BF16 has: experts.gate_up_proj, experts.down_proj
+            # Qwen3.5 FP8 has: experts.0.gate_proj, experts.0.up_proj, experts.0.down_proj
+            return "experts.gate_up_proj" in weight_name or (
+                "experts.down_proj" in weight_name
+                and ".experts." in weight_name
+                and weight_name.count(".experts.") == 1
+            )
+
+        def get_fused_expert_mapping(self) -> list[tuple[str, str, str]]:
+            """Return mapping for fused expert weights (BF16 format)."""
+            # (param_name, weight_name, shard_id)
+            return [
+                ("experts.w13_weight", "experts.gate_up_proj", "w1"),  # Will be chunked
+                ("experts.w2_weight", "experts.down_proj", "w2"),
+            ]
+
+        def load_fused_expert_weights(
+            self,
+            original_name: str,
+            name: str,
+            params_dict: dict,
+            loaded_weight: torch.Tensor,
+            shard_id: str,
+            num_experts: int,
+        ) -> bool:
+            """Load fused expert weights (BF16 format) into per-expert parameters.
+
+            Args:
+                original_name: Original weight name from checkpoint (e.g., "experts.gate_up_proj")
+                name: Mapped parameter name (e.g., "experts.w13_weight")
+                params_dict: Model parameters dict
+                loaded_weight: The weight tensor to load
+                shard_id: Shard identifier ("w1", "w2", "w3")
+                num_experts: Number of experts
+
+            Returns:
+                True if weights were loaded successfully
+            """
+            param = params_dict[name]
+            weight_loader = param.weight_loader
+            loaded_local_expert = False
+
+            # Special handling for gate_up_proj: chunk into gate and up
+            if "gate_up_proj" in original_name:
+                gate_weight, up_weight = loaded_weight.chunk(2, dim=-2)
+                # Load gate part (w1)
+                for expert_id in range(num_experts):
+                    try:
+                        success = weight_loader(
+                            param, gate_weight[expert_id], name, "w1", expert_id, return_success=True
+                        )
+                        if success:
+                            loaded_local_expert = True
+                    except TypeError:
+                        weight_loader(param, gate_weight[expert_id], name, "w1", expert_id)
+                        loaded_local_expert = True
+                # Load up part (w3)
+                for expert_id in range(num_experts):
+                    try:
+                        success = weight_loader(
+                            param, up_weight[expert_id], name, "w3", expert_id, return_success=True
+                        )
+                        if success:
+                            loaded_local_expert = True
+                    except TypeError:
+                        weight_loader(param, up_weight[expert_id], name, "w3", expert_id)
+                        loaded_local_expert = True
+            else:
+                # down_proj or other weights - no chunking
+                for expert_id in range(num_experts):
+                    try:
+                        success = weight_loader(
+                            param, loaded_weight[expert_id], name, shard_id, expert_id, return_success=True
+                        )
+                        if success:
+                            loaded_local_expert = True
+                    except TypeError:
+                        weight_loader(param, loaded_weight[expert_id], name, shard_id, expert_id)
+                        loaded_local_expert = True
+
+            return loaded_local_expert
+
         def load_weights(self, weights: Iterable[tuple[str, torch.Tensor]]) -> set[str]:
             # load weights in plugin mode and discard passed weights generator
             # here prefix is "model." because Qwen3ForCausalLM is constructed in model
@@ -721,6 +806,7 @@ if is_vllm():
                 config=self.atom_config,
                 prefix="model.",
                 weights_mapper=self.hf_to_atom_mapper,
+                load_fused_expert_weights_fn=self.load_fused_expert_weights,
             )
             return loaded_weights_record
 
@@ -743,6 +829,7 @@ if is_vllm():
             "v_proj": ("qkv_proj", "v"),
             "gate_proj": ("gate_up_proj", 0),
             "up_proj": ("gate_up_proj", 1),
+            "gate_up_proj": ["gate_proj", "up_proj"],  # BF16 models: fused → split
             "in_proj_qkv": ("in_proj_qkvz", (0, 1, 2)),
             "in_proj_z": ("in_proj_qkvz", 3),
             "in_proj_b": ("in_proj_ba", 0),

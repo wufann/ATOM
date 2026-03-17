@@ -180,6 +180,7 @@ def load_model_in_plugin_mode(
     config,
     prefix: str = "",
     weights_mapper: WeightsMapper | None = None,
+    load_fused_expert_weights_fn=None,
 ) -> set[str]:
 
     # during loading model, the outplace operation may consume more
@@ -214,6 +215,7 @@ def load_model_in_plugin_mode(
         prefix=prefix,
         is_plugin_mode=True,
         weights_mapper=weights_mapper,
+        load_fused_expert_weights_fn=load_fused_expert_weights_fn,
     )
     _empty_cache()
     return loaded_weights_record
@@ -228,6 +230,7 @@ def load_model(
     prefix: str = "",
     is_plugin_mode: bool = False,
     weights_mapper: WeightsMapper | None = None,
+    load_fused_expert_weights_fn=None,
 ):
     def have_shared_expert(name):
         maybe_matching_list = ["mlp.shared_experts.", "mlp.shared_expert."]
@@ -260,6 +263,12 @@ def load_model(
             expert_index[weight_name_part] = (param_name_part, expert_id, shard_id)
         # Sort by length descending so longer (more specific) prefixes match first
         expert_weight_prefixes = sorted(expert_index.keys(), key=len, reverse=True)
+
+    # Get fused expert mapping from model if it provides one
+    is_fused_expert = False
+    fused_expert_params_mapping = []
+    detect_fused_expert_fn = getattr(model, "detect_fused_expert_format", None)
+    get_fused_expert_mapping_fn = getattr(model, "get_fused_expert_mapping", None)
 
     with concurrent.futures.ThreadPoolExecutor() as executor:
         futures = []
@@ -317,24 +326,76 @@ def load_model(
                 if "mtp" in name and not spec_decode:
                     continue
                 if k in name:
-                    v, shard_id = packed_modules_mapping[k]
-                    param_name = name.replace(k, v)
-                    # FIXME output_scale has a value, so accuracy is incorrect. this should be loaded and used in llfp4.
-                    if "output_scale" not in param_name:
-                        param = model.get_parameter(param_name)
-                        weight_loader = getattr(param, "weight_loader")
-                        # weight_loader(param, weight_tensor, shard_id)
-                        futures.append(
-                            executor.submit(
-                                weight_loader, param, weight_tensor, shard_id
+                    packed_value = packed_modules_mapping[k]
+                    # Handle both tuple (fuse parameter) and list (shard parameter)
+                    if isinstance(packed_value, list):
+                        # Checkpoint has fused weight, split into separate params
+                        for shard_idx, target_name in enumerate(packed_value):
+                            param_name = name.replace(k, target_name)
+                            if "output_scale" not in param_name:
+                                param = model.get_parameter(param_name)
+                                weight_loader = getattr(param, "weight_loader")
+                                futures.append(
+                                    executor.submit(
+                                        weight_loader, param, weight_tensor, shard_idx
+                                    )
+                                )
+                                loaded_weights_record.add(prefix + param_name)
+                    else:
+                        # Checkpoint has separate weights, load into fused param
+                        v, shard_id = packed_value
+                        param_name = name.replace(k, v)
+                        # FIXME output_scale has a value, so accuracy is incorrect. this should be loaded and used in llfp4.
+                        if "output_scale" not in param_name:
+                            param = model.get_parameter(param_name)
+                            weight_loader = getattr(param, "weight_loader")
+                            # weight_loader(param, weight_tensor, shard_id)
+                            futures.append(
+                                executor.submit(
+                                    weight_loader, param, weight_tensor, shard_id
+                                )
                             )
-                        )
-                        loaded_weights_record.add(prefix + param_name)
+                            loaded_weights_record.add(prefix + param_name)
                     break
             else:
+                # Detect fused expert format if model provides detection function
+                if detect_fused_expert_fn is not None and not is_fused_expert:
+                    is_fused_expert = detect_fused_expert_fn(name)
+                    if is_fused_expert and get_fused_expert_mapping_fn is not None:
+                        fused_expert_params_mapping = get_fused_expert_mapping_fn()
+
                 # Check if model has expert mapping before processing
                 if has_expert_mapping:
-                    # O(1) lookup using pre-indexed expert_mapping
+                    # Handle fused expert format
+                    # Model-specific detection and handling via callback functions
+                    if is_fused_expert and load_fused_expert_weights_fn is not None and fused_expert_params_mapping:
+                        matched = False
+                        for mapping_entry in fused_expert_params_mapping:
+                            param_name, weight_name, shard_id = mapping_entry[:3]
+                            if weight_name not in name:
+                                continue
+                            name_mapped = name.replace(weight_name, param_name)
+                            if name_mapped not in params_dict:
+                                continue
+
+                            # Generic call - model provides implementation details
+                            num_experts = getattr(hf_config, "n_routed_experts", 0) or getattr(hf_config, "num_experts", 0)
+                            matched = load_fused_expert_weights_fn(
+                                name,  # Original checkpoint name
+                                name_mapped,  # Mapped parameter name
+                                params_dict,
+                                weight_tensor,
+                                shard_id,
+                                num_experts,
+                            )
+
+                            if matched:
+                                loaded_weights_record.add(prefix + name)
+                                break
+
+                        if matched:
+                            continue
+
                     matched = False
                     for wm_name in expert_weight_prefixes:
                         if wm_name not in name:
