@@ -246,51 +246,97 @@ The following table shows how vLLM config fields map to ATOM `Config` fields:
 | `enable_prefix_caching` | `cache_config.enable_prefix_caching` |
 | `enable_expert_parallel` | `parallel_config.enable_expert_parallel` |
 | `compilation_config.level` | `compilation_config.mode` |
-| `enforce_eager` | Always `True` (ATOM disables its own CUDA graphs in plugin mode) |
+| `enforce_eager` | Always `True` (ATOM does not use its own CUDA graph logic in plugin mode) |
 
-**Design note:** In plugin mode, ATOM sets `enforce_eager=True` and
-`use_cudagraph=False` because CUDA graph capture is managed by vLLM, not by ATOM.
-ATOM's compilation config level is still derived from vLLM's
-`compilation_config.mode` to control torch.compile behavior.
+**CUDA graphs vs torch.compile:**
+
+- **CUDA graphs** — In plugin mode, ATOM sets `enforce_eager=True` and
+  `use_cudagraph=False` in its own `Config`, meaning ATOM's CUDA graph capture
+  and replay logic is completely disabled. CUDA graph management is fully
+  delegated to vLLM — vLLM decides when to capture, which batch sizes to graph,
+  and how to replay. ATOM's attention backends cooperate by implementing
+  `build_for_cudagraph_capture()` so that vLLM can capture ATOM kernels inside
+  its own CUDA graphs.
+
+- **torch.compile** — In contrast, torch.compile is handled entirely by ATOM,
+  not by vLLM. ATOM's `@support_torch_compile` decorator wraps each model's
+  `forward` method and routes compilation through ATOM's own `VllmBackend`.
+  The compilation level is derived from vLLM's `compilation_config.mode`
+  (e.g., `PIECEWISE`), but the actual compilation pipeline — including graph
+  splitting, Inductor invocation, and compiled-graph caching — is ATOM's own
+  implementation.
+
+  Graph splitting is a key difference: ATOM splits the `torch.fx` graph at
+  attention boundaries (the `unified_attention` op registered by vLLM) so that
+  each piecewise subgraph can be compiled and cached independently. This split
+  strategy is defined in ATOM's `split_graph()` / `_split_judge_func()` and is
+  independent of vLLM's compilation backend.
 
 ---
 
 ## 6. Attention Integration
 
-### 6.1 Backend Selection
+vLLM's OOT plugin interface allows an external platform to supply its own
+attention backend. ATOM hooks into this by overriding
+`ATOMPlatform.get_attn_backend_cls()` — the only contract point between vLLM and
+the plugin for attention dispatch.
 
-`ATOMPlatform.get_attn_backend_cls()` overrides vLLM's default attention backend
-selection:
+### 6.1 How the Backend Is Selected
 
-| Condition | Backend | Description |
+When vLLM resolves the attention backend for a model, it calls the platform's
+`get_attn_backend_cls()`. ATOM's implementation returns one of two backends based
+on the model's attention type:
+
+| Model Attention Type | Returned Backend | Example Models |
 |---|---|---|
-| MLA model (`attn_selector_config.use_mla == True`) | `AiterMLABackend` | AITER Multi-Latent Attention backend |
-| Standard MHA model | `AiterBackend` | AITER paged attention backend |
-| `ATOM_DISABLE_VLLM_PLUGIN_ATTENTION=1` | vLLM default | Falls back to vLLM's ROCm attention |
+| MLA (`use_mla == True`) | `AiterMLABackend` | DeepSeek-R1, Kimi-K2 |
+| Standard MHA | `AiterBackend` | Qwen3, Llama |
 
-### 6.2 MLA Patching
+Setting `ATOM_DISABLE_VLLM_PLUGIN_ATTENTION=1` causes `ATOMPlatform` to delegate
+back to the parent `RocmPlatform.get_attn_backend_cls()`, restoring vLLM's
+built-in ROCm attention path.
 
-For models using Multi-Latent Attention (e.g., DeepSeek-R1), ATOM patches vLLM's
-`MLAAttention` class at registration time via `patch_vllm_mla_attention()`:
+### 6.2 Backend–vLLM Contract
 
-- **`process_weights_after_loading`** — patched to call ATOM's weight processing
-  and set default quantization scales (`_k_scale`, `_v_scale`, `_q_scale`,
-  `_prob_scale`) instead of vLLM's original logic.
-- **`forward_impl`** — patched to call `self.impl.forward_impl_plugin_mode()`
-  when available, enabling fused QK RoPE and KV cache update within the attention
-  forward pass.
+Each ATOM backend fulfills vLLM's `AttentionBackend` interface by providing:
 
-### 6.3 Plugin-Mode Decorators
+1. **Attention implementation class** — `PagedAttentionImpl` for MHA or
+   `MLAAttention` for MLA. These are ATOM's own attention implementations
+   decorated at import time with plugin-mode methods (via
+   `PagedAttentionImplDecoratorForPluginMode` / `MLAAttentionImplDecoratorForPluginMode`)
+   so they expose the `forward_impl_plugin_mode` entry point that vLLM calls.
 
-ATOM uses decorator classes to adapt its attention backends for plugin mode:
+2. **Metadata builder class** — translates vLLM's `CommonAttentionMetadata` into
+   the metadata structure the ATOM kernels expect. The builders are similarly
+   decorated (via `AiterAttentionMetadataBuilderDecoratorForPluginMode` /
+   `AiterMLAAttentionMetadataBuilderDecoratorForPluginMode`) to inherit from
+   vLLM's `AttentionMetadataBuilder` while injecting ATOM-specific `build()`
+   logic.
 
-| Decorator | Target | Purpose |
-|---|---|---|
-| `AiterAttentionMetadataBuilderDecoratorForPluginMode` | MHA metadata builder | Adapts vLLM attention metadata to ATOM format |
-| `AiterMLAAttentionMetadataBuilderDecoratorForPluginMode` | MLA metadata builder | Adapts vLLM MLA metadata to ATOM format |
-| `AiterBackendDecoratorForPluginMode` | `AiterBackend` | Adds plugin-mode attributes and methods |
-| `MLAAttentionImplDecoratorForPluginMode` | `MLAAttentionImpl` | Adds MLA plugin-mode forward implementation |
-| `FusedMoEDecoratorForPluginMode` | `FusedMoE` | Renames to `ATOMFusedMoE` to prevent vLLM kernel initialization conflicts |
+3. **Static properties** — `get_kv_cache_shape`, `get_supported_kernel_block_sizes`,
+   `get_supported_head_sizes`, etc. These tell vLLM how to allocate and manage
+   KV cache blocks in the format ATOM's kernels expect.
+
+### 6.3 Key Design Points
+
+- **Decorator-based injection** — ATOM does not fork or subclass vLLM's attention
+  classes directly. Instead, Python decorators dynamically replace base classes
+  and inject methods at import time, keeping ATOM's attention code decoupled from
+  vLLM's internal class hierarchy.
+
+- **`forward_includes_kv_cache_update = True`** — both backends declare that the
+  KV cache write happens inside the forward pass. This tells vLLM to skip its
+  separate cache-update step and gives ATOM full control over the
+  RoPE → cache → attention pipeline.
+
+- **`accept_output_buffer`** — set to `False` for MHA (ATOM allocates its own
+  output tensor) and `True` for MLA (vLLM provides the output buffer). This
+  reflects the different memory-management needs of each attention type.
+
+- **Extend workspace** — the MHA metadata builder allocates an `extend_workspace`
+  buffer outside of vLLM's memory accounting for chunked-prefill KV gathering.
+  If you encounter OOM during chunked prefill, consider lowering
+  `gpu_memory_utilization`.
 
 ---
 
@@ -352,9 +398,8 @@ loader with support for sharded checkpoints and quantization-aware loading.
 
 ## 9. Known Limitations
 
-- **CUDA graphs** — In plugin mode, ATOM disables its own CUDA graph capture
-  (`enforce_eager=True`, `use_cudagraph=False`). CUDA graph management is
-  delegated entirely to vLLM.
+- **CUDA graphs** — ATOM's own CUDA graph logic is disabled in plugin mode.
+  CUDA graph capture and replay are managed entirely by vLLM.
 
 - **`max_num_batched_tokens` threshold** — When `max_num_batched_tokens >= 18432`,
   there is a known issue with illegal memory access in the ASM `fused_moe` kernel.
