@@ -368,7 +368,11 @@ def load_model(
                 if has_expert_mapping:
                     # Handle fused expert format
                     # Model-specific detection and handling via callback functions
-                    if is_fused_expert and load_fused_expert_weights_fn is not None and fused_expert_params_mapping:
+                    if (
+                        is_fused_expert
+                        and load_fused_expert_weights_fn is not None
+                        and fused_expert_params_mapping
+                    ):
                         matched = False
                         for mapping_entry in fused_expert_params_mapping:
                             param_name, weight_name, shard_id = mapping_entry[:3]
@@ -379,7 +383,9 @@ def load_model(
                                 continue
 
                             # Generic call - model provides implementation details
-                            num_experts = getattr(hf_config, "n_routed_experts", 0) or getattr(hf_config, "num_experts", 0)
+                            num_experts = getattr(
+                                hf_config, "n_routed_experts", 0
+                            ) or getattr(hf_config, "num_experts", 0)
                             matched = load_fused_expert_weights_fn(
                                 name,  # Original checkpoint name
                                 name_mapped,  # Mapped parameter name

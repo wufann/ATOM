@@ -434,9 +434,6 @@ class Qwen3_5Model(Qwen3NextModel):
 
         self.config = config
         # print("config type :", config, flush=True)
-        if isinstance(config, Qwen3_5MoeTextConfig):
-            self.config.n_shared_experts = 1
-            self.config.n_routed_experts = self.config.num_experts
 
         self.vocab_size = config.vocab_size
 
@@ -461,22 +458,6 @@ class Qwen3_5Model(Qwen3NextModel):
         )
 
         self.norm = Qwen3_5RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
-
-    # Only moe model will use this method, so we can safely add fused expert mapping here without worrying about other models
-    def get_expert_mapping(self) -> list[tuple[str, str, int, str]]:
-        # Params for weights, fp8 weight scales, fp8 activation scales
-        # (param_name, weight_name, expert_id, shard_id)
-        return FusedMoE.make_expert_params_mapping(
-            ckpt_gate_proj_name="gate_proj",
-            ckpt_down_proj_name="down_proj",
-            ckpt_up_proj_name="up_proj",
-            num_experts=self.config.n_routed_experts
-            + (
-                self.config.n_shared_experts
-                if is_rocm_aiter_fusion_shared_expert_enabled()
-                else 0
-            ),
-        )
 
 
 class Qwen3_5ForCausalLMBase(nn.Module):
@@ -543,7 +524,19 @@ class Qwen3_5MoeForCausalLM(Qwen3_5ForCausalLMBase):
         # set MoE hyperparameters
 
     def get_expert_mapping(self) -> list[tuple[str, str, int, str]]:
-        return self.model.get_expert_mapping()
+        # Params for weights, fp8 weight scales, fp8 activation scales
+        # (param_name, weight_name, expert_id, shard_id)
+        return FusedMoE.make_expert_params_mapping(
+            ckpt_gate_proj_name="gate_proj",
+            ckpt_down_proj_name="down_proj",
+            ckpt_up_proj_name="up_proj",
+            num_experts=self.config.n_routed_experts
+            + (
+                self.config.n_shared_experts
+                if is_rocm_aiter_fusion_shared_expert_enabled()
+                else 0
+            ),
+        )
 
 
 ########################################################
@@ -682,6 +675,10 @@ if is_vllm():
             nn.Module.__init__(self)
             self.atom_config = atom_config
             vllm_config = atom_config.plugin_config.vllm_config
+            atom_config.hf_config.text_config.n_shared_experts = 1
+            atom_config.hf_config.text_config.n_routed_experts = (
+                atom_config.hf_config.text_config.num_experts
+            )
             config: Qwen3_5MoeConfig = atom_config.hf_config
             quant_config = vllm_config.quant_config
             multimodal_config = vllm_config.model_config.multimodal_config
@@ -762,35 +759,56 @@ if is_vllm():
                 for expert_id in range(num_experts):
                     try:
                         success = weight_loader(
-                            param, gate_weight[expert_id], name, "w1", expert_id, return_success=True
+                            param,
+                            gate_weight[expert_id],
+                            name,
+                            "w1",
+                            expert_id,
+                            return_success=True,
                         )
                         if success:
                             loaded_local_expert = True
                     except TypeError:
-                        weight_loader(param, gate_weight[expert_id], name, "w1", expert_id)
+                        weight_loader(
+                            param, gate_weight[expert_id], name, "w1", expert_id
+                        )
                         loaded_local_expert = True
                 # Load up part (w3)
                 for expert_id in range(num_experts):
                     try:
                         success = weight_loader(
-                            param, up_weight[expert_id], name, "w3", expert_id, return_success=True
+                            param,
+                            up_weight[expert_id],
+                            name,
+                            "w3",
+                            expert_id,
+                            return_success=True,
                         )
                         if success:
                             loaded_local_expert = True
                     except TypeError:
-                        weight_loader(param, up_weight[expert_id], name, "w3", expert_id)
+                        weight_loader(
+                            param, up_weight[expert_id], name, "w3", expert_id
+                        )
                         loaded_local_expert = True
             else:
                 # down_proj or other weights - no chunking
                 for expert_id in range(num_experts):
                     try:
                         success = weight_loader(
-                            param, loaded_weight[expert_id], name, shard_id, expert_id, return_success=True
+                            param,
+                            loaded_weight[expert_id],
+                            name,
+                            shard_id,
+                            expert_id,
+                            return_success=True,
                         )
                         if success:
                             loaded_local_expert = True
                     except TypeError:
-                        weight_loader(param, loaded_weight[expert_id], name, shard_id, expert_id)
+                        weight_loader(
+                            param, loaded_weight[expert_id], name, shard_id, expert_id
+                        )
                         loaded_local_expert = True
 
             return loaded_local_expert
