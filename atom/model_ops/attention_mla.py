@@ -138,10 +138,12 @@ class MLAAttention(nn.Module):
                 f"Padded head count ({self.padded_num_heads}) must be divisible "
                 f"by num_heads ({num_heads}) for head repeat"
             )
-            logger.info(
-                f"MLA head repeat enabled: {num_heads} -> {self.padded_num_heads} "
-                f"(repeat factor {self.head_repeat_factor})"
-            )
+            if not getattr(MLAAttention, "_head_repeat_logged", False):
+                MLAAttention._head_repeat_logged = True
+                logger.info(
+                    f"MLA head repeat enabled: {num_heads} -> {self.padded_num_heads} "
+                    f"(repeat factor {self.head_repeat_factor})"
+                )
 
         self.q_lora_rank = mla_modules.q_lora_rank
         self.kv_lora_rank = mla_modules.kv_lora_rank
@@ -498,9 +500,7 @@ class MLAAttention(nn.Module):
                     paged_kv_indices,
                     kv_last_page_lens,
                     max_q_len,
-                    self.scale,
-                    0.0,
-                    None,
+                    sm_scale=self.scale,
                     q_scale=self._q_scale,
                     kv_scale=self._k_scale,
                 )
