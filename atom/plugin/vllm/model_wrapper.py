@@ -99,12 +99,16 @@ def _patch_vllm_profile_labels() -> None:
             def __enter__(self):
                 if self.name == "gpu_model_runner: forward":
                     vllm_config = get_current_vllm_config_or_none()
+                    print('[zejun] vllm_config = ', vllm_config, flush=True)
+                    print('[zejun] _is_torch_profile_enabled(vllm_config) = ', _is_torch_profile_enabled(vllm_config), flush=True)
+                    print('[zejun] is_forward_context_available() = ', is_forward_context_available(), flush=True)
                     if (
                         vllm_config is not None
                         and _is_torch_profile_enabled(vllm_config)
                         and is_forward_context_available()
                     ):
                         record_label = _build_step_profiler_label()
+                        print('[zejun] record_label = ', record_label, flush=True)
                         if record_label is not None:
                             print('[zejun] record_label = ', record_label, flush=True)
                             self.ctx = record_function(record_label)
