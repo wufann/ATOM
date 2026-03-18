@@ -4,8 +4,6 @@ import torch
 from einops import rearrange
 from torch import nn
 
-import triton
-import triton.language as tl
 
 from aiter.dist.parallel_state import get_tensor_model_parallel_rank
 from atom.config import QuantizationConfig, Config
@@ -42,7 +40,7 @@ from atom.models.utils import (
     maybe_prefix,
     extract_layer_index,
 )
-
+from atom.model_ops.split_chunk import fused_split_chunk_zeros
 
 GDN = Qwen3NextGatedDeltaNet
 if is_vllm():
@@ -169,25 +167,20 @@ class Qwen3_5GatedDeltaNet(GDN):
         # Part 1: Input Projection
         # ============================================================
         mixed_qkvz = self.in_proj_qkvz(hidden_states)
+        ba = self.in_proj_ba(hidden_states)
+
+
         qkv_size = (self.key_dim * 2 + self.value_dim) // self.tp_size
         z_size = self.value_dim // self.tp_size
-        mixed_qkv, z = mixed_qkvz.split([qkv_size, z_size], dim=-1)
-        z = z.reshape(z.size(0), -1, self.head_v_dim)
-        ba = self.in_proj_ba(hidden_states)
-        b, a = ba.chunk(2, dim=-1)
+        num_v_heads_tp = self.num_v_heads // self.tp_size
 
-        b = b.contiguous()
-        a = a.contiguous()
+        mixed_qkv, z, b, a, core_attn_out = fused_split_chunk_zeros(
+            mixed_qkvz, ba, qkv_size, z_size, self.head_v_dim, num_v_heads_tp
+        )
+
         # ============================================================
         # Part 2: Core Attention (Custom Op)
         # ============================================================
-        # Note: we should not use torch.empty here like other attention backends,
-        # see discussions in https://github.com/vllm-project/vllm/pull/28182
-        core_attn_out = torch.zeros(
-            (num_tokens, self.num_v_heads // self.tp_size, self.head_v_dim),
-            dtype=hidden_states.dtype,
-            device=hidden_states.device,
-        )
         core_attn_out = self.attn(mixed_qkv, b, a, core_attn_out)
 
         # ============================================================
