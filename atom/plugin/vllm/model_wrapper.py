@@ -1,5 +1,6 @@
 from collections.abc import Iterable
 from contextlib import nullcontext
+from functools import wraps
 
 import importlib
 import torch
@@ -60,51 +61,123 @@ def _prepare_env(atom_config) -> None:
     logger.info("Init aiter dist for using aiter custom collective ops")
     init_aiter_dist(config=atom_config)
 
+    _patch_vllm_profile_labels()
 
-def _get_step_attn_metadata():
+
+def _is_torch_profile_enabled(vllm_config: VllmConfig) -> bool:
+    profiler_config = getattr(vllm_config, "profiler_config", None)
+    return profiler_config is not None and bool(
+        getattr(profiler_config, "torch_profiler_dir", "")
+    )
+
+
+def _patch_vllm_profile_labels() -> None:
+    from vllm.v1.worker.gpu_model_runner import GPUModelRunner
+
+    # `GPUModelRunner._model_forward()` stays in Python for eager, piecewise,
+    # full cudagraph replay, and ubatch modes, so one patch here covers all of
+    # those execution paths without modifying vLLM source files.
+    if not getattr(GPUModelRunner, "_atom_step_label_patched", False):
+        original_model_forward = GPUModelRunner._model_forward
+
+        @wraps(original_model_forward)
+        def _wrapped_model_forward(
+            self,
+            input_ids=None,
+            positions=None,
+            intermediate_tensors=None,
+            inputs_embeds=None,
+            **model_kwargs,
+        ):
+            record_label = None
+            if _is_torch_profile_enabled(
+                self.vllm_config
+            ) and is_forward_context_available():
+                record_label = _build_step_profiler_label()
+
+            with (
+                record_function(record_label)
+                if record_label is not None
+                else nullcontext()
+            ):
+                return original_model_forward(
+                    self,
+                    input_ids=input_ids,
+                    positions=positions,
+                    intermediate_tensors=intermediate_tensors,
+                    inputs_embeds=inputs_embeds,
+                    **model_kwargs,
+                )
+
+        GPUModelRunner._model_forward = _wrapped_model_forward
+        GPUModelRunner._atom_step_label_patched = True
+
+
+def _get_step_attn_metadata_list():
     if not is_forward_context_available():
-        return None
+        return []
 
     attn_metadata = get_forward_context().attn_metadata
     if attn_metadata is None:
-        return None
+        return []
 
     if isinstance(attn_metadata, list):
+        metadatas = []
         # In ubatch mode, vLLM stores one metadata dict per microbatch. We need
-        # the first actual per-layer metadata object, not the outer list itself.
-        # Keep the empty-dict guard for robustness if a placeholder slips through.
+        # one representative metadata object per microbatch and aggregate them to
+        # get the full-step request/token counts.
         for ubatch_attn_metadata in attn_metadata:
             if not ubatch_attn_metadata:
                 continue
-            return next(iter(ubatch_attn_metadata.values()), None)
-        return None
+            metadata = next(iter(ubatch_attn_metadata.values()), None)
+            if metadata is not None:
+                metadatas.append(metadata)
+        return metadatas
 
     if isinstance(attn_metadata, dict):
-        return next(iter(attn_metadata.values()), None)
+        metadata = next(iter(attn_metadata.values()), None)
+        return [metadata] if metadata is not None else []
 
-    return attn_metadata
+    return [attn_metadata]
 
 
 def _build_step_profiler_label() -> str | None:
-    attn_metadata = _get_step_attn_metadata()
-    if attn_metadata is None:
+    attn_metadata_list = _get_step_attn_metadata_list()
+    if not attn_metadata_list:
         return None
 
-    plugin_metadata = getattr(attn_metadata, "plugin_metadata", None)
-    if plugin_metadata is None:
-        return None
+    num_actual_tokens = 0
+    num_decodes = 0
+    num_decode_tokens = 0
+    num_prefills = 0
+    num_extends = 0
+    num_extend_tokens = 0
+    num_prefill_tokens = 0
 
-    num_actual_tokens = plugin_metadata.num_actual_tokens
-    num_decodes = plugin_metadata.num_decodes
-    num_decode_tokens = plugin_metadata.num_decode_tokens
-    num_prefills = plugin_metadata.num_prefills
-    num_extends = getattr(plugin_metadata, "num_extends", 0)
-    num_extend_tokens = getattr(plugin_metadata, "num_extend_tokens", 0)
-    num_prefill_tokens = getattr(
-        plugin_metadata,
-        "num_prefill_tokens",
-        num_actual_tokens - num_decode_tokens - num_extend_tokens,
-    )
+    for attn_metadata in attn_metadata_list:
+        plugin_metadata = getattr(attn_metadata, "plugin_metadata", None)
+        if plugin_metadata is None:
+            continue
+
+        actual_tokens_i = plugin_metadata.num_actual_tokens
+        decodes_i = plugin_metadata.num_decodes
+        decode_tokens_i = plugin_metadata.num_decode_tokens
+        prefills_i = plugin_metadata.num_prefills
+        extends_i = getattr(plugin_metadata, "num_extends", 0)
+        extend_tokens_i = getattr(plugin_metadata, "num_extend_tokens", 0)
+        prefill_tokens_i = getattr(
+            plugin_metadata,
+            "num_prefill_tokens",
+            actual_tokens_i - decode_tokens_i - extend_tokens_i,
+        )
+
+        num_actual_tokens += actual_tokens_i
+        num_decodes += decodes_i
+        num_decode_tokens += decode_tokens_i
+        num_prefills += prefills_i
+        num_extends += extends_i
+        num_extend_tokens += extend_tokens_i
+        num_prefill_tokens += prefill_tokens_i
 
     if num_actual_tokens <= 0:
         return None
@@ -140,11 +213,6 @@ class ATOMModelBase(nn.Module, VllmModel, SupportsQuant, SupportsPP):
         self.model_config = vllm_config.model_config
         self.parallel_config = vllm_config.parallel_config
         self.quant_config = vllm_config.quant_config
-        profiler_config = getattr(vllm_config, "profiler_config", None)
-        self.enable_torch_profile = (
-            profiler_config is not None
-            and bool(getattr(profiler_config, "torch_profiler_dir", ""))
-        )
 
         # Weights to skip in `self.load_weights`
         self.skip_prefixes: list[str] = []
@@ -192,25 +260,13 @@ class ATOMModelBase(nn.Module, VllmModel, SupportsQuant, SupportsPP):
                 "positions"
             ]
             buf[: positions.numel()].copy_(positions)
-
-        record_label = (
-            _build_step_profiler_label()
-            if self.enable_torch_profile
-            else None
+        hidden_states = self.model(
+            input_ids=input_ids,
+            positions=positions,
+            intermediate_tensors=intermediate_tensors,
+            inputs_embeds=inputs_embeds,
+            **model_kwargs,
         )
-
-        with (
-            record_function(record_label)
-            if record_label is not None
-            else nullcontext()
-        ):
-            hidden_states = self.model(
-                input_ids=input_ids,
-                positions=positions,
-                intermediate_tensors=intermediate_tensors,
-                inputs_embeds=inputs_embeds,
-                **model_kwargs,
-            )
 
         if not self.pp_group.is_last_rank:
             return IntermediateTensors({"hidden_states": hidden_states})
