@@ -169,7 +169,6 @@ class Qwen3_5GatedDeltaNet(GDN):
         mixed_qkvz = self.in_proj_qkvz(hidden_states)
         ba = self.in_proj_ba(hidden_states)
 
-
         qkv_size = (self.key_dim * 2 + self.value_dim) // self.tp_size
         z_size = self.value_dim // self.tp_size
         num_v_heads_tp = self.num_v_heads // self.tp_size
