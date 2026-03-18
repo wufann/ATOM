@@ -76,7 +76,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
     ).lower()
     == "1",
     "ATOM_USE_CUSTOM_ALL_GATHER": lambda: os.getenv(
-        "ATOM_USE_CUSTOM_ALL_GATHER", "0"
+        "ATOM_USE_CUSTOM_ALL_GATHER", "1"
     ).lower()
     == "1",
 }

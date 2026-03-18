@@ -427,6 +427,8 @@ class Qwen3NextAttention(nn.Module):
                 ),
             )
         else:
+            from atom.model_ops.base_attention import Attention
+
             self.attn = Attention(
                 self.num_heads,
                 self.head_dim,
