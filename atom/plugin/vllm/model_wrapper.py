@@ -186,16 +186,22 @@ def _build_step_profiler_label() -> str | None:
     if total_reqs <= 0:
         return None
 
-    # Shorthand label format:
-    # d = decode-only step, p = step containing prefill/extend work.
-    # req/tok = total requests/tokens in this step.
-    # dec/pre/ext each carry request count followed by token count.
-    step = "p" if (num_prefills > 0 or num_extends > 0) else "d"
+    # OOT step naming policy:
+    # - prefill wins if any prefill tokens exist
+    # - otherwise extend wins if any extend tokens exist
+    # - otherwise the step is decode
+    # `bs` is total request count, `tok` is total token count,
+    # and `p/e/d` are prefill/extend/decode token counts.
+    if num_prefills > 0:
+        step = "prefill"
+    elif num_extends > 0:
+        step = "extend"
+    else:
+        step = "decode"
+
     return (
-        f"{step}[req{total_reqs}, tok{num_actual_tokens}, "
-        f"dec{num_decodes}, tok{num_decode_tokens}, "
-        f"pre{num_prefills}, tok{num_prefill_tokens}, "
-        f"ext{num_extends}, tok{num_extend_tokens}]"
+        f"{step}[bs={total_reqs} tok={num_actual_tokens} "
+        f"p={num_prefill_tokens} e={num_extend_tokens} d={num_decode_tokens}]"
     )
 
 
