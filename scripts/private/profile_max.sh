@@ -1,5 +1,6 @@
 MODEL=/home/hatwu/models/Kimi-K2-Thinking-MXFP4/
-PORT=8001
+MODEL=/models/amd/DeepSeek-R1-MXFP4
+PORT=8000
 log_dir=./
 RESULT_FILENAME=atom_result.json
 
