@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1773956829183,
+  "lastUpdate": 1773996101168,
   "repoUrl": "https://github.com/ROCm/ATOM",
   "entries": {
     "Benchmark": [
@@ -14217,6 +14217,57 @@ window.BENCHMARK_DATA = {
           {
             "name": "gpt-oss-120b 8192/1024 c=8 _gpu_count",
             "value": 1,
+            "unit": ""
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Pleaplusone",
+            "username": "ganyi1996ppo",
+            "email": "ygan@amd.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "a744f50c551f4c226bdeb15153d0dfe3a89de923",
+          "message": "[Model Support] Qwen3.5 Support (#333)\n\n* Inital support for qwen3.5 on atom oot plugin mode\n\nSigned-off-by: ganyi <ygan@amd.com>\n\n* fix accuracy bugs\n\nSigned-off-by: ganyi <ygan@amd.com>\n\n* fix accuracy bugs\n\nSigned-off-by: ganyi <ygan@amd.com>\n\n* remove unnecessary change\n\nSigned-off-by: ganyi <ygan@amd.com>\n\n* remove unnecessary change\n\nSigned-off-by: ganyi <ygan@amd.com>\n\n* support fused_experts load for qwen3.5 bf16 moe model\n\nSigned-off-by: ganyi <ygan@amd.com>\n\n* support fused_experts load for qwen3.5 bf16 moe model\n\nSigned-off-by: ganyi <ygan@amd.com>\n\n* add qwen3.5 dense model support\n\nSigned-off-by: ganyi <ygan@amd.com>\n\n* resolve comments\n\nSigned-off-by: ganyi <ygan@amd.com>\n\n* add causal_conv1d fusion\n\nSigned-off-by: ganyi <ygan@amd.com>\n\n* resolve comments\n\nSigned-off-by: ganyi <ygan@amd.com>\n\n* add split qkvz and zero kernel fusion\n\nSigned-off-by: ganyi <ygan@amd.com>\n\n* format\n\nSigned-off-by: ganyi <ygan@amd.com>\n\n* resolve comments\n\nSigned-off-by: ganyi <ygan@amd.com>\n\n* resolve comments\n\nSigned-off-by: ganyi <ygan@amd.com>\n\n---------\n\nSigned-off-by: ganyi <ygan@amd.com>",
+          "timestamp": "2026-03-20T08:37:40Z",
+          "url": "https://github.com/ROCm/ATOM/commit/a744f50c551f4c226bdeb15153d0dfe3a89de923"
+        },
+        "date": 1773996100263,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "DeepSeek-R1-0528-MoE-MXFP4-Attn-MTP-PTPC-FP8-mtp3 1024/1024 c=128 throughput (tok/s)",
+            "value": 4661.06,
+            "unit": "tok/s",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23333910047"
+          },
+          {
+            "name": "DeepSeek-R1-0528-MoE-MXFP4-Attn-MTP-PTPC-FP8-mtp3 1024/1024 c=128 Total Tput (tok/s)",
+            "value": 9346.74,
+            "unit": "tok/s",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23333910047"
+          },
+          {
+            "name": "DeepSeek-R1-0528-MoE-MXFP4-Attn-MTP-PTPC-FP8-mtp3 1024/1024 c=128 TTFT (ms)",
+            "value": 2235.23,
+            "unit": "ms",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23333910047"
+          },
+          {
+            "name": "DeepSeek-R1-0528-MoE-MXFP4-Attn-MTP-PTPC-FP8-mtp3 1024/1024 c=128 TPOT (ms)",
+            "value": 24.15,
+            "unit": "ms",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23333910047"
+          },
+          {
+            "name": "DeepSeek-R1-0528-MoE-MXFP4-Attn-MTP-PTPC-FP8-mtp3 1024/1024 c=128 _gpu_count",
+            "value": 8,
             "unit": ""
           }
         ]
