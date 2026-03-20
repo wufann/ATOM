@@ -35,9 +35,11 @@ from aiter.ops.triton.batched_gemm_a8w8_a_per_token_group_prequant_w_per_batched
 )
 
 
-from atom.plugin import is_plugin_mode
+from atom.plugin import is_plugin_mode, is_vllm
+from tqdm import tqdm
 
 from atom.plugin.attention_mla import MLAAttentionImplDecoratorForPluginMode
+from atom.plugin.attention_mla_sparse import MLASparseAttentionImplDecoratorForPluginMode
 
 # torch.set_printoptions(threshold=10_000)
 
@@ -98,6 +100,7 @@ def dynamic_per_batched_tensor_quant(
     return x_scl_sat.to(dtype).contiguous(), scale.float().reciprocal()
 
 
+@MLASparseAttentionImplDecoratorForPluginMode
 @MLAAttentionImplDecoratorForPluginMode
 class MLAAttention(nn.Module):
     def __init__(
@@ -153,6 +156,17 @@ class MLAAttention(nn.Module):
         )
         self.layer_num = layer_num
 
+    def do_kv_cache_update(
+        self,
+        kv_c_normed: torch.Tensor,
+        k_pe: torch.Tensor,
+        kv_cache: torch.Tensor,
+        slot_mapping: torch.Tensor,
+        kv_cache_dtype: str,
+        k_scale: torch.Tensor,
+    ) -> None:
+        pass
+
     def process_weights_after_loading(self):
         if is_rocm_aiter_fp4bmm_enabled():
             kv_b_proj_weight = get_and_maybe_dequant_weights(self.kv_b_proj)
@@ -193,6 +207,40 @@ class MLAAttention(nn.Module):
             self.W_V, self.W_V_scale = dynamic_per_batched_tensor_quant(
                 W_V, dtype=dtypes.fp8
             )
+            
+            if is_plugin_mode() and is_vllm():
+                # The kernel operates on non-padded inputs. Hence, pre-compiling
+                # triton kernel to avoid runtime compilation for unseen batch sizes
+                # Pre-compile for batch sizes 1 to 1024 to cover most use-cases.
+                # On DS-R1, this step adds roughly 50s to the model loading time.
+                max_batch_size = 1024  # [ToDo] Find the optimal upper limit
+                pre_compilation_list = list(range(1, max_batch_size + 1))
+                from vllm.distributed.parallel_state import is_global_first_rank
+                if is_global_first_rank():
+                    pre_compilation_list = tqdm(
+                        pre_compilation_list,
+                        desc="[Aiter Triton] Pre-compiling fp8 BMM kernel",
+                        total=max_batch_size,
+                    )
+
+                for m in pre_compilation_list:
+                    x = torch.empty(
+                        (self.W_K.shape[0], m, self.W_K.shape[2]),
+                        dtype=torch.bfloat16,
+                        device=self.W_K.device,
+                    )
+                    x = _aiter_triton_fp8_bmm(
+                        x, self.W_K, self.W_K_scale, group_size=128, transpose_bm=True
+                    )
+
+                    x = torch.empty(
+                        (self.W_V.shape[0], m, self.W_V.shape[2]),
+                        dtype=torch.bfloat16,
+                        device=self.W_V.device,
+                    )
+                    x = _aiter_triton_fp8_bmm(
+                        x, self.W_V, self.W_V_scale, group_size=128, transpose_bm=True
+                    )
 
     def _v_up_proj_and_o_proj(self, x):
         # Convert from (B, N, L) to (N, B, L)

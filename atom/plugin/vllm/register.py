@@ -22,6 +22,7 @@ _VLLM_MODEL_REGISTRY_OVERRIDES: dict[str, str] = {
     "Qwen3MoeForCausalLM": ATOM_MOE_CAUSAL_LM_MODEL_WRAPPER,
     "GptOssForCausalLM": ATOM_MOE_CAUSAL_LM_MODEL_WRAPPER,
     "DeepseekV3ForCausalLM": ATOM_MOE_CAUSAL_LM_MODEL_WRAPPER,
+    "GlmMoeDsaForCausalLM": ATOM_MOE_CAUSAL_LM_MODEL_WRAPPER,
 }
 
 
@@ -114,6 +115,35 @@ def _replace_vllm_mla_attention_process_weights_after_loading() -> None:
     MLAAttention.process_weights_after_loading = _process_weights_after_loading
 
 
+def _replace_vllm_mla_sparse_attention_forward_impl(attention) -> None:
+    # Patch forward_impl to redirect to ATOM's impl forward methods in sparse MLA.
+    # vLLM's original forward_impl does Q absorption using self.W_K etc.,
+    # but ATOM's process_weights_after_loading doesn't create those weights.
+    # ATOM's impl has its own forward_impl_plugin_mode that handles everything
+    # (RoPE, KV cache write, Q absorption, attention kernel, V up-projection).
+    if not disable_vllm_plugin_attention:
+
+        def _forward_impl_plugin(
+            self, q, k_c_normed, k_pe, kv_cache, attn_metadata,
+            output=None, **kwargs,
+        ):
+            if hasattr(self.impl, "forward_impl_sparse_plugin_mode"):
+                fwd_impl = self.impl.forward_impl_plugin_mode
+            else:
+                fwd_impl = attention.forward_impl
+            return fwd_impl(
+                layer=self,
+                q=q,
+                k_c_normed=k_c_normed,
+                k_pe=k_pe,
+                kv_cache=kv_cache,
+                attn_metadata=attn_metadata,
+                output=output,
+            )
+
+        attention.forward_impl = _forward_impl_plugin
+
+
 def register_model() -> None:
     if disable_vllm_plugin:
         logger.info("Disable ATOM model register")
@@ -152,3 +182,4 @@ def register_model() -> None:
     _patch_vllm_attention_process_weights_after_loading(Attention)
     _replace_vllm_mla_attention_process_weights_after_loading()
     _patch_vllm_attention_process_weights_after_loading(MLAAttention)
+    _replace_vllm_mla_sparse_attention_forward_impl(MLAAttention)
