@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1774060703739,
+  "lastUpdate": 1774070680078,
   "repoUrl": "https://github.com/ROCm/ATOM",
   "entries": {
     "Benchmark": [
@@ -17204,6 +17204,173 @@ window.BENCHMARK_DATA = {
           },
           {
             "name": "gpt-oss-120b 1024/1024 c=8 _gpu_count",
+            "value": 1,
+            "unit": ""
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Lingpeng Jin",
+            "username": "valarLip",
+            "email": "103567126+valarLip@users.noreply.github.com"
+          },
+          "committer": {
+            "name": "Lingpeng Jin",
+            "username": "valarLip",
+            "email": "103567126+valarLip@users.noreply.github.com"
+          },
+          "id": "b78bd3d0b3148d1ead363e200d351b1c6600552c",
+          "message": "docs: update benchmark-guide warmup and add parameter comments",
+          "timestamp": "2026-03-21T04:42:15Z",
+          "url": "https://github.com/ROCm/ATOM/commit/b78bd3d0b3148d1ead363e200d351b1c6600552c"
+        },
+        "date": 1774070679490,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "DeepSeek-R1-0528 1024/1024 c=128 throughput (tok/s)",
+            "value": 4530.93,
+            "unit": "tok/s",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23372240231"
+          },
+          {
+            "name": "DeepSeek-R1-0528 1024/1024 c=128 Total Tput (tok/s)",
+            "value": 9071.82,
+            "unit": "tok/s",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23372240231"
+          },
+          {
+            "name": "DeepSeek-R1-0528 1024/1024 c=128 TTFT (ms)",
+            "value": 302.25,
+            "unit": "ms",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23372240231"
+          },
+          {
+            "name": "DeepSeek-R1-0528 1024/1024 c=128 TPOT (ms)",
+            "value": 27.2,
+            "unit": "ms",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23372240231"
+          },
+          {
+            "name": "DeepSeek-R1-0528 1024/1024 c=128 _gpu_count",
+            "value": 8,
+            "unit": ""
+          },
+          {
+            "name": "DeepSeek-R1-0528-mtp3 1024/1024 c=128 throughput (tok/s)",
+            "value": 5527.81,
+            "unit": "tok/s",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23372240231"
+          },
+          {
+            "name": "DeepSeek-R1-0528-mtp3 1024/1024 c=128 Total Tput (tok/s)",
+            "value": 11085.64,
+            "unit": "tok/s",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23372240231"
+          },
+          {
+            "name": "DeepSeek-R1-0528-mtp3 1024/1024 c=128 TTFT (ms)",
+            "value": 339.85,
+            "unit": "ms",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23372240231"
+          },
+          {
+            "name": "DeepSeek-R1-0528-mtp3 1024/1024 c=128 TPOT (ms)",
+            "value": 22.12,
+            "unit": "ms",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23372240231"
+          },
+          {
+            "name": "DeepSeek-R1-0528-mtp3 1024/1024 c=128 _gpu_count",
+            "value": 8,
+            "unit": ""
+          },
+          {
+            "name": "DeepSeek-R1-0528-MoE-MXFP4-Attn-MTP-PTPC-FP8-mtp3 1024/1024 c=128 throughput (tok/s)",
+            "value": 5148.98,
+            "unit": "tok/s",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23372240231"
+          },
+          {
+            "name": "DeepSeek-R1-0528-MoE-MXFP4-Attn-MTP-PTPC-FP8-mtp3 1024/1024 c=128 Total Tput (tok/s)",
+            "value": 10325.42,
+            "unit": "tok/s",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23372240231"
+          },
+          {
+            "name": "DeepSeek-R1-0528-MoE-MXFP4-Attn-MTP-PTPC-FP8-mtp3 1024/1024 c=128 TTFT (ms)",
+            "value": 557.02,
+            "unit": "ms",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23372240231"
+          },
+          {
+            "name": "DeepSeek-R1-0528-MoE-MXFP4-Attn-MTP-PTPC-FP8-mtp3 1024/1024 c=128 TPOT (ms)",
+            "value": 23.71,
+            "unit": "ms",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23372240231"
+          },
+          {
+            "name": "DeepSeek-R1-0528-MoE-MXFP4-Attn-MTP-PTPC-FP8-mtp3 1024/1024 c=128 _gpu_count",
+            "value": 8,
+            "unit": ""
+          },
+          {
+            "name": "GLM-5-FP8 1024/1024 c=128 throughput (tok/s)",
+            "value": 2607.34,
+            "unit": "tok/s",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23372240231"
+          },
+          {
+            "name": "GLM-5-FP8 1024/1024 c=128 Total Tput (tok/s)",
+            "value": 5220.42,
+            "unit": "tok/s",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23372240231"
+          },
+          {
+            "name": "GLM-5-FP8 1024/1024 c=128 TTFT (ms)",
+            "value": 400.14,
+            "unit": "ms",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23372240231"
+          },
+          {
+            "name": "GLM-5-FP8 1024/1024 c=128 TPOT (ms)",
+            "value": 47.38,
+            "unit": "ms",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23372240231"
+          },
+          {
+            "name": "GLM-5-FP8 1024/1024 c=128 _gpu_count",
+            "value": 8,
+            "unit": ""
+          },
+          {
+            "name": "gpt-oss-120b 1024/1024 c=128 throughput (tok/s)",
+            "value": 8559.98,
+            "unit": "tok/s",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23372240231"
+          },
+          {
+            "name": "gpt-oss-120b 1024/1024 c=128 Total Tput (tok/s)",
+            "value": 17138.77,
+            "unit": "tok/s",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23372240231"
+          },
+          {
+            "name": "gpt-oss-120b 1024/1024 c=128 TTFT (ms)",
+            "value": 213.21,
+            "unit": "ms",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23372240231"
+          },
+          {
+            "name": "gpt-oss-120b 1024/1024 c=128 TPOT (ms)",
+            "value": 14.27,
+            "unit": "ms",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23372240231"
+          },
+          {
+            "name": "gpt-oss-120b 1024/1024 c=128 _gpu_count",
             "value": 1,
             "unit": ""
           }
