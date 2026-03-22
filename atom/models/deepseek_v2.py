@@ -45,7 +45,7 @@ from aiter.ops.triton.fused_fp8_quant import (
     fused_reduce_rms_fp8_group_quant,
     fused_rms_fp8_group_quant,
 )
-from aiter.ops.triton.fused_qk_norm import fused_qk_rmsnorm
+from aiter.ops.triton.fusions.fused_qk_norm import fused_qk_rmsnorm
 from aiter.ops.triton.fused_mxfp4_quant import (
     fused_reduce_rms_mxfp4_quant,
     fused_rms_mxfp4_quant,
