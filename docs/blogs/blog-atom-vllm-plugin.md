@@ -1,39 +1,28 @@
-# ATOM as a Plugin Backend for vLLM: Bridging Hardware Optimization with Framework Ecosystem
+# ATOM as vLLM Plugin Backend: Ecosystem Co-Evolution for AMD LLM Inference
 
 ## 1. Introduction
 
-Large Language Model (LLM) inference is a rapidly evolving domain where the tension between **hardware-specific optimization** and **framework compatibility** is a constant challenge. On one hand, squeezing maximum performance from accelerators like AMD Instinct GPUs demands deep, hardware-aware kernel engineering. On the other hand, production deployments overwhelmingly rely on established serving frameworks — particularly [vLLM](https://github.com/vllm-project/vllm) — for their battle-tested scheduling, memory management, and API compatibility.
+LLM inference has long faced a core tension between hardware-specific optimization and framework compatibility. Maximizing performance on AMD Instinct GPUs needs deep hardware-aware kernel engineering, while production LLM serving overwhelmingly uses [vLLM](https://github.com/vllm-project/vllm) — the industry de facto standard — for its proven scheduling, memory management and API compatibility.
 
-ATOM, a high-performance inference engine purpose-built for AMD Instinct GPUs, addresses this tension through a dual-mode architecture. In addition to operating as a standalone server, ATOM can seamlessly integrate into vLLM as an **Out-of-Tree (OOT) Plugin Backend**, delivering AMD-specific model and kernel optimizations without requiring any code changes to vLLM itself.
+ATOM, a high-performance inference engine built solely for AMD Instinct GPUs, solves this conflict via its dual-mode architecture. It runs as a standalone server or integrates seamlessly into vLLM as a plugin backend, delivering AMD-native model and kernel optimizations with no changes to vLLM’s core code.
 
-### The Goal: Ecosystem Co-Evolution, Not Competition
+The ATOM vLLM plugin is not a fork or replacement for vLLM, but a collaborative bridge connecting AMD’s hardware innovation to the open-source vLLM ecosystem, rooted in co-evolution not competition. As the universal LLM serving standard, vLLM underpins inference infrastructure for startups and hyperscalers, which rely on its APIs, continuous batching and operational tools. Switching frameworks brings steep learning costs, migration risks and overhead, so users should not choose between their trusted framework and full hardware performance.
 
-The ATOM vLLM plugin is **not** a fork or a replacement — it is designed as a **collaborative bridge** between AMD's hardware innovation cycle and the open-source vLLM ecosystem. The core philosophy is **win-win co-evolution**.
+Integrating ATOM as a vLLM plugin creates a cross-stakeholder win-win with five core advantages: 
 
-vLLM has become the **de facto standard** for LLM serving in the industry. From startups to hyperscalers, teams across the world have built their inference infrastructure around vLLM's API, its continuous batching scheduler, and its operational tooling. Users are deeply familiar with vLLM's deployment workflow — `vllm serve`, OpenAI-compatible endpoints, tensor parallelism flags — and switching to a different serving framework introduces significant learning cost, migration risk, and operational overhead. **Users should not have to choose between the framework they know and the hardware performance they need.**
+- **Zero learning curve:** Full compatibility with existing vLLM commands, APIs and workflows; ATOM runs transparently with no new tools or setups, only better kernel performance and a consistent experience.
 
-By integrating ATOM as a plugin into vLLM, we achieve a true win-win:
+- **Early AMD innovation access:** Instant use of cutting-edge AMD features (e.g., FP4 on MI355X, MI400 rack-scale inference) and top-tier kernel optimizations (e.g., AITER fused attention, custom AllReduce) without waiting for vLLM mainline upstreaming, cutting time-to-value for new AMD chips.
 
-- **Zero learning cost for users.** Users continue to use the exact same vLLM commands, APIs, and deployment patterns they already know. ATOM activates transparently — no new CLI, no new configuration format, no new monitoring stack. The user experience is identical; only the underlying kernel performance improves.
+- **Agile innovation sandbox:** A fast validation layer for new ideas, hardware enablement and kernel library testing (e.g., AITER), flexibly aligning with AMD’s roadmap (new GPUs, FP8/FP4, attention mechanisms) free from upstream release limits. 
 
-- **Early access to AMD's latest hardware and software.** Through the plugin, users can immediately benefit from AMD's newest hardware features (FP4 on MI355X, rack-scale inference on MI400) and latest kernel optimizations (AITER's fused attention, custom AllReduce) — without waiting for these to be upstreamed into vLLM's mainline. This dramatically shortens the time-to-value for new AMD silicon.
+- **vLLM as the production-grade foundation for the ROCm platform:** As the community-standard serving framework, vLLM delivers the stability, broad model coverage, and enterprise-grade features critical for production deployments of AMD ROCm-based infrastructure.
 
-- **ATOM as the POC (Proof of Concept) layer.** ATOM serves as the fast-moving proving ground where new ideas are incubated, new AMD hardware features are brought up, and new kernel libraries (such as AITER) are integrated and validated. It operates with the agility needed to keep pace with AMD's silicon roadmap — new GPU launches, new precision formats (FP8, FP4), new attention mechanisms — without being constrained by upstream release cycles.
+- **Upstreamed mature optimizations:** ATOM acts as a temporary sandbox; stabilized kernels, optimizations and features are upstreamed to vLLM’s native ROCm backend, benefiting all ROCm users and boosting the open-source ecosystem.
 
-- **vLLM as the production-grade product for the ROCm platform.** vLLM is the community-standard serving framework and the primary production-level product for AMD ROCm users. It provides the stability, broad model coverage, and enterprise-grade features that production deployments demand.
+This plugin builds a closed, iterative innovation cycle: new hardware/ideas/libraries → fast validation via ATOM → upstream integration into vLLM core when mature → universal access for ROCm users. This model speeds up AMD’s hardware advantages to users via ATOM, while long-term work feeds back to the open-source community through vLLM. This post breaks down the design, architecture and implementation of the ATOM vLLM plugin system.
 
-- **Upstream everything once mature.** The ATOM plugin is explicitly designed as a **temporary home** for optimizations. Once a new kernel, a new model optimization, or a new hardware feature has been validated and stabilized through ATOM's plugin mode, the goal is to **upstream all of these improvements into vLLM's native ROCm backend**. This ensures the broader community benefits, and vLLM's ROCm support continuously improves.
-
-In concrete terms, the ATOM plugin lifecycle looks like this:
-
-- **New hardware launch** (e.g., MI355X with native FP4, MI400 with rack-scale interconnect) → ATOM rapidly integrates AITER kernels, brings up new hardware features such as rack-scale distributed inference, and validates end-to-end performance via the plugin.
-- **New idea incubation** (e.g., fused QK-RoPE-Cache-Update for MLA) → ATOM implements and benchmarks the optimization in plugin mode, iterating quickly without upstream dependencies.
-- **New library integration** (e.g., AITER's MLA decode kernel, custom AllReduce) → ATOM integrates the library through the plugin, proving its value in real serving workloads.
-- **Maturity → Upstream** → Once validated, the optimization is contributed back to vLLM's native codebase, becoming available to all ROCm users without requiring ATOM.
-
-This approach ensures that AMD's hardware advantages reach users as fast as possible through ATOM, while the long-term investment flows back into the open-source ecosystem through vLLM.
-
-This post dives into the design, architecture, and implementation details of the ATOM vLLM plugin system.
+This post dives deep into the design, architecture, and implementation details of the ATOM vLLM plugin system.
 
 
 ## 2. Architecture Overview
@@ -50,30 +39,7 @@ For a comprehensive technical reference covering configuration translation, atte
 
 The ATOM vLLM plugin system consists of four interconnected subsystems:
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                    vLLM Framework                        │
-│  (Scheduling, Batching, KV Cache, API, CUDAGraph)       │
-├─────────────────────────────────────────────────────────┤
-│                  ATOM Plugin Layer                        │
-│  ┌──────────────┐ ┌──────────────┐ ┌──────────────────┐ │
-│  │   Platform    │ │    Model     │ │    Attention      │ │
-│  │  Registration │ │  Registration│ │    Backend        │ │
-│  │  (ATOMPlatform)│ │  (Wrapper)   │ │  (MHA + MLA)     │ │
-│  └──────┬───────┘ └──────┬───────┘ └────────┬─────────┘ │
-├─────────┼────────────────┼──────────────────┼───────────┤
-│         │     ATOM Core  │                  │            │
-│  ┌──────┴───────┐ ┌──────┴───────┐ ┌───────┴──────────┐ │
-│  │   Config     │ │    Model     │ │   Model Ops      │ │
-│  │  Translation │ │   Impl       │ │   (PagedAttn,    │ │
-│  │              │ │  (Qwen, DS)  │ │    MLA, Linear)  │ │
-│  └──────────────┘ └──────────────┘ └──────────────────┘ │
-├─────────────────────────────────────────────────────────┤
-│                    AITER Kernel Library                   │
-│  (FlashAttn, FusedMoE, MLA Decode, Quantized GEMM,      │
-│   RoPE+Cache Fusion, Custom AllReduce)                   │
-└─────────────────────────────────────────────────────────┘
-```
+![ATOM vLLM Plugin Architecture Stack](atom_vllm_architecture_stack.svg)
 
 ## 3. Execution Details
 
