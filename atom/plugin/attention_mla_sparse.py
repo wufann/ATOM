@@ -396,8 +396,7 @@ class MLASparseAttentionImplPluginModeMethods:
         )
 
         # V up-projection
-        out_up_proj = self._v_up_proj(attn_out)
-        output[:num_actual_toks] = out_up_proj
+        self._v_up_proj(attn_out, out=output[:num_actual_toks])
 
         return output_padded
 

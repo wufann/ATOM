@@ -4,6 +4,7 @@ import logging
 import torch
 from atom.plugin.prepare import _set_framework_backbone
 from atom.utils import envs
+from atom.plugin.vllm.mla_patch import patch_vllm_mla_attention
 
 logger = logging.getLogger("atom")
 
@@ -22,6 +23,9 @@ _VLLM_MODEL_REGISTRY_OVERRIDES: dict[str, str] = {
     "Qwen3MoeForCausalLM": ATOM_MOE_CAUSAL_LM_MODEL_WRAPPER,
     "GptOssForCausalLM": ATOM_MOE_CAUSAL_LM_MODEL_WRAPPER,
     "DeepseekV3ForCausalLM": ATOM_MOE_CAUSAL_LM_MODEL_WRAPPER,
+    "Glm4MoeForCausalLM": ATOM_MOE_CAUSAL_LM_MODEL_WRAPPER,
+    "Qwen3_5ForConditionalGeneration": "atom.models.qwen3_5:Qwen3_5ForConditionalGeneration",
+    "Qwen3_5MoeForConditionalGeneration": "atom.models.qwen3_5:Qwen3_5MoeForConditionalGeneration",
     "GlmMoeDsaForCausalLM": ATOM_MOE_CAUSAL_LM_MODEL_WRAPPER,
 }
 
@@ -71,48 +75,6 @@ def _patch_vllm_attention_process_weights_after_loading(attention) -> None:
 
     setattr(wrapped, "_atom_default_act_dtype_patched", True)
     attention.process_weights_after_loading = wrapped
-
-
-def set_default_quant_scales(
-    layer: torch.nn.Module, register_buffer: bool = False
-) -> None:
-    """Sets default quantization scales for the layer."""
-    if register_buffer:
-        layer.register_buffer("_k_scale", torch.tensor(1.0, dtype=torch.float32))
-        layer.register_buffer("_v_scale", torch.tensor(1.0, dtype=torch.float32))
-        layer.register_buffer("_q_scale", torch.tensor(1.0, dtype=torch.float32))
-        layer.register_buffer("_prob_scale", torch.tensor(1.0, dtype=torch.float32))
-    else:
-        layer._k_scale.fill_(1.0)
-        layer._v_scale.fill_(1.0)
-        layer._q_scale.fill_(1.0)
-        layer._prob_scale.fill_(1.0)
-
-    # We also keep q/k/v_scale on host (cpu) memory for attention
-    # backends that require the scales to be on host instead of on device.
-    # e.g. Flashinfer
-    layer._q_scale_float = 1.0
-    layer._k_scale_float = 1.0
-    layer._v_scale_float = 1.0
-    layer._prob_scale_float = 1.0
-
-
-def _replace_vllm_mla_attention_process_weights_after_loading() -> None:
-    try:
-        from vllm.attention.layer import MLAAttention
-    except ImportError:
-        from vllm.model_executor.layers.attention import MLAAttention
-
-    def _process_weights_after_loading(self, act_dtype: torch.dtype):
-        if hasattr(self.impl, "process_weights_after_loading"):
-            if disable_vllm_plugin_attention:
-                self.impl.process_weights_after_loading(act_dtype)
-            else:
-                self.impl.process_weights_after_loading()
-
-        set_default_quant_scales(self, register_buffer=False)
-
-    MLAAttention.process_weights_after_loading = _process_weights_after_loading
 
 
 def _replace_vllm_mla_sparse_attention_forward_impl(attention) -> None:
@@ -172,6 +134,7 @@ def register_model() -> None:
         vllm_model_registry._try_load_model_cls.cache_clear()
         vllm_model_registry._try_inspect_model_cls.cache_clear()
 
+    patch_vllm_mla_attention()
     # patch attention process weights after loading
     # to avoid the specific handle in ATOM loader
     try:
@@ -180,6 +143,11 @@ def register_model() -> None:
         from vllm.model_executor.layers.attention import Attention, MLAAttention
 
     _patch_vllm_attention_process_weights_after_loading(Attention)
-    _replace_vllm_mla_attention_process_weights_after_loading()
     _patch_vllm_attention_process_weights_after_loading(MLAAttention)
     _replace_vllm_mla_sparse_attention_forward_impl(MLAAttention)
+
+    # Patch vLLM graph_capture to also enter aiter's ca_comm.capture(),
+    # avoiding hipMemcpyAsync in fused_allreduce_rmsnorm when model uses aiter collectives
+    from atom.plugin.vllm.graph_capture_patch import apply_graph_capture_patch
+
+    apply_graph_capture_patch()
