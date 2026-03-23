@@ -17,7 +17,7 @@ The ATOM vLLM plugin backend keeps the standard vLLM CLI, server APIs, and gener
 ```bash
 export ATOM_DISABLE_VLLM_PLUGIN_ATTENTION=1
 
-vllm serve Qwen/Qwen3.5-35B-A3B-Instruct-FP8 \
+vllm serve Qwen/Qwen3.5-35B-A3B-FP8 \
     --host localhost \
     --port 8000 \
     --tensor-parallel-size 2 \
@@ -34,7 +34,7 @@ vllm serve Qwen/Qwen3.5-35B-A3B-Instruct-FP8 \
 ```bash
 export ATOM_DISABLE_VLLM_PLUGIN_ATTENTION=1
 
-vllm serve Qwen/Qwen3.5-397B-A5B-Instruct-FP8 \
+vllm serve Qwen/Qwen3.5-397B-A17B-FP8 \
     --host localhost \
     --port 8000 \
     --tensor-parallel-size 8 \
@@ -56,7 +56,7 @@ Users can use the default vllm bench commands for performance benchmarking.
 vllm bench serve \
     --host localhost \
     --port 8000 \
-    --model Qwen/Qwen3.5-35B-A3B-Instruct-FP8 \
+    --model Qwen/Qwen3.5-35B-A3B-FP8 \
     --dataset-name random \
     --random-input-len 8000 \
     --random-output-len 1000 \
@@ -80,7 +80,7 @@ profiler_config=$(printf '{"profiler":"torch","torch_profiler_dir":"%s","torch_p
 
 ```bash
 lm_eval --model local-completions \
-        --model_args model=Qwen/Qwen3.5-35B-A3B-Instruct-FP8,base_url=http://localhost:8000/v1/completions,num_concurrent=16,max_retries=3,tokenized_requests=False \
+        --model_args model=Qwen/Qwen3.5-35B-A3B-FP8,base_url=http://localhost:8000/v1/completions,num_concurrent=16,max_retries=3,tokenized_requests=False \
         --tasks gsm8k \
         --num_fewshot 3
 ```
