@@ -1,206 +1,167 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="920" viewBox="0 0 1100 920" role="img" aria-labelledby="title desc">
-  <title id="title">ATOM vLLM Plugin Architecture Stack</title>
-  <desc id="desc">Four-layer architecture diagram showing vLLM framework, ATOM plugin layer, AITER kernel library, and AMD Instinct hardware, with responsibilities and data flow arrows between layers.</desc>
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="920" viewBox="0 0 1100 920">
+  <title>ATOM vLLM Plugin Architecture Stack</title>
   <defs>
     <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#07111e"/>
       <stop offset="100%" stop-color="#101a31"/>
     </linearGradient>
     <linearGradient id="layerBlue" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="rgba(19, 36, 64, 0.95)"/>
-      <stop offset="100%" stop-color="rgba(30, 55, 90, 0.90)"/>
+      <stop offset="0%" stop-color="#132440"/>
+      <stop offset="100%" stop-color="#1e375a"/>
     </linearGradient>
     <linearGradient id="layerViolet" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="rgba(44, 28, 63, 0.95)"/>
-      <stop offset="100%" stop-color="rgba(55, 35, 80, 0.90)"/>
+      <stop offset="0%" stop-color="#2c1c3f"/>
+      <stop offset="100%" stop-color="#372350"/>
     </linearGradient>
     <linearGradient id="layerGreen" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="rgba(16, 45, 38, 0.95)"/>
-      <stop offset="100%" stop-color="rgba(22, 60, 50, 0.90)"/>
+      <stop offset="0%" stop-color="#102d26"/>
+      <stop offset="100%" stop-color="#163c32"/>
     </linearGradient>
     <linearGradient id="layerRed" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="rgba(60, 20, 20, 0.95)"/>
-      <stop offset="100%" stop-color="rgba(80, 28, 28, 0.90)"/>
+      <stop offset="0%" stop-color="#3c1414"/>
+      <stop offset="100%" stop-color="#501c1c"/>
     </linearGradient>
-    <linearGradient id="headerBlue" x1="0%" y1="0%" x2="100%" y2="100%">
+    <linearGradient id="hdrBlue" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#63cfff"/>
       <stop offset="100%" stop-color="#4c91ff"/>
     </linearGradient>
-    <linearGradient id="headerViolet" x1="0%" y1="0%" x2="100%" y2="100%">
+    <linearGradient id="hdrViolet" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#d17cff"/>
       <stop offset="100%" stop-color="#8c6bff"/>
     </linearGradient>
-    <linearGradient id="headerGreen" x1="0%" y1="0%" x2="100%" y2="100%">
+    <linearGradient id="hdrGreen" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#72edc0"/>
       <stop offset="100%" stop-color="#3db88a"/>
     </linearGradient>
-    <linearGradient id="headerRed" x1="0%" y1="0%" x2="100%" y2="100%">
+    <linearGradient id="hdrRed" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#ff6b6b"/>
       <stop offset="100%" stop-color="#e04040"/>
     </linearGradient>
-    <linearGradient id="arrowGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="rgba(255,255,255,0.5)"/>
-      <stop offset="100%" stop-color="rgba(255,255,255,0.15)"/>
-    </linearGradient>
-    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#020816" flood-opacity="0.5"/>
+    <filter id="sh" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#020816" flood-opacity="0.5"/>
     </filter>
-    <filter id="softGlow" x="-50%" y="-50%" width="200%" height="200%">
-      <feGaussianBlur stdDeviation="5" result="blur"/>
-      <feMerge>
-        <feMergeNode in="blur"/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
-    </filter>
-    <marker id="arrowDown" markerWidth="12" markerHeight="12" refX="6" refY="10" orient="auto">
-      <path d="M1,1 L6,10 L11,1" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="2"/>
+    <marker id="ad" markerWidth="12" markerHeight="12" refX="6" refY="10" orient="auto">
+      <path d="M1,1 L6,10 L11,1" fill="none" stroke="#556680" stroke-width="2"/>
     </marker>
-    <style>
-      .title { fill: #f6fbff; font: 700 32px 'Segoe UI', Arial, sans-serif; letter-spacing: 0.2px; }
-      .subtitle { fill: #b1c0d9; font: 500 15px 'Segoe UI', Arial, sans-serif; }
-      .layerBox { stroke-width: 1.5; filter: url(#shadow); }
-      .layerBoxBlue { stroke: rgba(99, 207, 255, 0.35); }
-      .layerBoxViolet { stroke: rgba(185, 136, 255, 0.35); }
-      .layerBoxGreen { stroke: rgba(114, 237, 192, 0.35); }
-      .layerBoxRed { stroke: rgba(255, 107, 107, 0.35); }
-      .headerBadge { filter: url(#shadow); }
-      .layerName { fill: #f8fbff; font: 700 22px 'Segoe UI', Arial, sans-serif; }
-      .layerSub { fill: rgba(248,251,255,0.7); font: 500 13px 'Segoe UI', Arial, sans-serif; }
-      .itemBox { fill: rgba(255,255,255,0.06); stroke: rgba(255,255,255,0.12); stroke-width: 1.2; rx: 14; }
-      .itemTitle { fill: #f0f4fa; font: 700 14px 'Segoe UI', Arial, sans-serif; }
-      .itemBody { fill: #b8c8de; font: 400 12px 'Segoe UI', Arial, sans-serif; }
-      .flowArrow { fill: none; stroke: url(#arrowGrad); stroke-width: 3; stroke-dasharray: 8 4; marker-end: url(#arrowDown); }
-      .flowLabel { fill: rgba(255,255,255,0.5); font: 500 12px 'Segoe UI', Arial, sans-serif; text-anchor: middle; }
-    </style>
   </defs>
 
-  <!-- Background -->
   <rect width="1100" height="920" fill="url(#bg)"/>
-  <circle cx="100" cy="80" r="160" fill="rgba(99, 207, 255, 0.06)"/>
-  <circle cx="1000" cy="850" r="200" fill="rgba(255, 107, 107, 0.05)"/>
-  <circle cx="950" cy="200" r="180" fill="rgba(185, 136, 255, 0.05)"/>
+  <circle cx="100" cy="80" r="160" fill="#0a1a2e" opacity="0.5"/>
+  <circle cx="1000" cy="850" r="200" fill="#1a0e0e" opacity="0.4"/>
+  <circle cx="950" cy="200" r="180" fill="#150e22" opacity="0.4"/>
 
-  <!-- Title -->
-  <text x="50" y="52" class="title">ATOM vLLM Plugin Architecture</text>
-  <text x="50" y="78" class="subtitle">Layered responsibility model  from user-facing API to AMD silicon</text>
+  <text x="50" y="52" fill="#f6fbff" font-family="Segoe UI, Arial, sans-serif" font-size="32" font-weight="700">ATOM vLLM Plugin Architecture</text>
+  <text x="50" y="78" fill="#b1c0d9" font-family="Segoe UI, Arial, sans-serif" font-size="15" font-weight="500">Layered responsibility model: from user-facing API to AMD silicon</text>
 
-  <!-- PPPPPPPPPPP LAYER 1: vLLM PPPPPPPPPPP -->
-  <rect x="50" y="100" width="1000" height="160" rx="22" fill="url(#layerBlue)" class="layerBox layerBoxBlue"/>
-  <rect x="70" y="112" width="120" height="32" rx="10" fill="url(#headerBlue)" class="headerBadge"/>
-  <text x="130" y="134" text-anchor="middle" class="layerName" style="font-size:16px; fill:#fff;">vLLM</text>
-  <text x="210" y="134" class="layerSub">Framework Runtime</text>
+  <!-- LAYER 1: vLLM -->
+  <rect x="50" y="100" width="1000" height="160" rx="22" fill="url(#layerBlue)" stroke="#3a6090" stroke-width="1.5" filter="url(#sh)"/>
+  <rect x="70" y="112" width="120" height="32" rx="10" fill="url(#hdrBlue)" filter="url(#sh)"/>
+  <text x="130" y="134" text-anchor="middle" fill="#ffffff" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="700">vLLM</text>
+  <text x="210" y="134" fill="#b0c8e8" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="500">Framework Runtime</text>
 
-  <!-- vLLM items -->
-  <rect x="70" y="152" width="220" height="52" class="itemBox"/>
-  <text x="86" y="174" class="itemTitle">Request Scheduling</text>
-  <text x="86" y="192" class="itemBody">Continuous batching, preemption</text>
+  <rect x="70" y="152" width="220" height="52" rx="14" fill="#0e1626" stroke="#2a3a55" stroke-width="1.2"/>
+  <text x="86" y="174" fill="#f0f4fa" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Request Scheduling</text>
+  <text x="86" y="192" fill="#b8c8de" font-family="Segoe UI, Arial, sans-serif" font-size="12">Continuous batching, preemption</text>
 
-  <rect x="310" y="152" width="220" height="52" class="itemBox"/>
-  <text x="326" y="174" class="itemTitle">KV Cache Management</text>
-  <text x="326" y="192" class="itemBody">Block allocation, paging, prefix caching</text>
+  <rect x="310" y="152" width="220" height="52" rx="14" fill="#0e1626" stroke="#2a3a55" stroke-width="1.2"/>
+  <text x="326" y="174" fill="#f0f4fa" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">KV Cache Management</text>
+  <text x="326" y="192" fill="#b8c8de" font-family="Segoe UI, Arial, sans-serif" font-size="12">Block allocation, paging, prefix caching</text>
 
-  <rect x="550" y="152" width="220" height="52" class="itemBox"/>
-  <text x="566" y="174" class="itemTitle">OpenAI-Compatible API</text>
-  <text x="566" y="192" class="itemBody">/v1/completions, /v1/chat, streaming</text>
+  <rect x="550" y="152" width="220" height="52" rx="14" fill="#0e1626" stroke="#2a3a55" stroke-width="1.2"/>
+  <text x="566" y="174" fill="#f0f4fa" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">OpenAI-Compatible API</text>
+  <text x="566" y="192" fill="#b8c8de" font-family="Segoe UI, Arial, sans-serif" font-size="12">/v1/completions, /v1/chat, streaming</text>
 
-  <rect x="790" y="152" width="240" height="52" class="itemBox"/>
-  <text x="806" y="174" class="itemTitle">CUDAGraph &amp; Compilation</text>
-  <text x="806" y="192" class="itemBody">Graph capture, replay, piecewise compile</text>
+  <rect x="790" y="152" width="240" height="52" rx="14" fill="#0e1626" stroke="#2a3a55" stroke-width="1.2"/>
+  <text x="806" y="174" fill="#f0f4fa" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">CUDAGraph &amp; Compilation</text>
+  <text x="806" y="192" fill="#b8c8de" font-family="Segoe UI, Arial, sans-serif" font-size="12">Graph capture, replay, piecewise compile</text>
 
-  <text x="70" y="240" class="itemBody" style="fill:rgba(99,207,255,0.6); font-style:italic;">Users run: vllm serve  no changes needed</text>
+  <text x="70" y="240" fill="#4a8abf" font-family="Segoe UI, Arial, sans-serif" font-size="12" font-style="italic">Users run: vllm serve -- no changes needed</text>
 
-  <!-- Flow arrow 1’2 -->
-  <line x1="550" y1="262" x2="550" y2="290" class="flowArrow"/>
-  <text x="580" y="280" class="flowLabel">plugin hooks</text>
+  <line x1="550" y1="262" x2="550" y2="290" stroke="#556680" stroke-width="3" stroke-dasharray="8 4" marker-end="url(#ad)"/>
+  <text x="590" y="280" fill="#667a95" font-family="Segoe UI, Arial, sans-serif" font-size="12" font-weight="500">plugin hooks</text>
 
-  <!-- PPPPPPPPPPP LAYER 2: ATOM Plugin PPPPPPPPPPP -->
-  <rect x="50" y="295" width="1000" height="190" rx="22" fill="url(#layerViolet)" class="layerBox layerBoxViolet"/>
-  <rect x="70" y="307" width="180" height="32" rx="10" fill="url(#headerViolet)" class="headerBadge"/>
-  <text x="160" y="329" text-anchor="middle" class="layerName" style="font-size:16px; fill:#fff;">ATOM Plugin</text>
-  <text x="270" y="329" class="layerSub">OOT Backend &amp; Model Optimization</text>
+  <!-- LAYER 2: ATOM Plugin -->
+  <rect x="50" y="295" width="1000" height="190" rx="22" fill="url(#layerViolet)" stroke="#5a3d80" stroke-width="1.5" filter="url(#sh)"/>
+  <rect x="70" y="307" width="180" height="32" rx="10" fill="url(#hdrViolet)" filter="url(#sh)"/>
+  <text x="160" y="329" text-anchor="middle" fill="#ffffff" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="700">ATOM Plugin</text>
+  <text x="270" y="329" fill="#c0a8e0" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="500">OOT Backend &amp; Model Optimization</text>
 
-  <!-- ATOM Plugin items  row 1 -->
-  <rect x="70" y="350" width="290" height="52" class="itemBox"/>
-  <text x="86" y="372" class="itemTitle">Platform Registration</text>
-  <text x="86" y="390" class="itemBody">ATOMPlatform ’ overrides attention backend selection</text>
+  <rect x="70" y="350" width="290" height="52" rx="14" fill="#0e1626" stroke="#3a2a55" stroke-width="1.2"/>
+  <text x="86" y="372" fill="#f0f4fa" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Platform Registration</text>
+  <text x="86" y="390" fill="#b8c8de" font-family="Segoe UI, Arial, sans-serif" font-size="12">ATOMPlatform: overrides attention backend</text>
 
-  <rect x="380" y="350" width="290" height="52" class="itemBox"/>
-  <text x="396" y="372" class="itemTitle">Model Registration &amp; Wrapper</text>
-  <text x="396" y="390" class="itemBody">ATOMModelBase ’ config translation, weight loading</text>
+  <rect x="380" y="350" width="290" height="52" rx="14" fill="#0e1626" stroke="#3a2a55" stroke-width="1.2"/>
+  <text x="396" y="372" fill="#f0f4fa" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Model Registration &amp; Wrapper</text>
+  <text x="396" y="390" fill="#b8c8de" font-family="Segoe UI, Arial, sans-serif" font-size="12">ATOMModelBase: config, weight loading</text>
 
-  <rect x="690" y="350" width="340" height="52" class="itemBox"/>
-  <text x="706" y="372" class="itemTitle">Attention Backends</text>
-  <text x="706" y="390" class="itemBody">AiterBackend (MHA) · AiterMLABackend (MLA)</text>
+  <rect x="690" y="350" width="340" height="52" rx="14" fill="#0e1626" stroke="#3a2a55" stroke-width="1.2"/>
+  <text x="706" y="372" fill="#f0f4fa" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Attention Backends</text>
+  <text x="706" y="390" fill="#b8c8de" font-family="Segoe UI, Arial, sans-serif" font-size="12">AiterBackend (MHA) / AiterMLABackend (MLA)</text>
 
-  <!-- ATOM Plugin items  row 2 -->
-  <rect x="70" y="414" width="290" height="52" class="itemBox"/>
-  <text x="86" y="436" class="itemTitle">Model Implementations</text>
-  <text x="86" y="454" class="itemBody">Qwen3, DeepSeek V3, GPT-OSS, GLM-4, Kimi-K2</text>
+  <rect x="70" y="414" width="290" height="52" rx="14" fill="#0e1626" stroke="#3a2a55" stroke-width="1.2"/>
+  <text x="86" y="436" fill="#f0f4fa" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Model Implementations</text>
+  <text x="86" y="454" fill="#b8c8de" font-family="Segoe UI, Arial, sans-serif" font-size="12">Qwen3, DeepSeek V3, GPT-OSS, GLM-4, Kimi-K2</text>
 
-  <rect x="380" y="414" width="290" height="52" class="itemBox"/>
-  <text x="396" y="436" class="itemTitle">Config Translation</text>
-  <text x="396" y="454" class="itemBody">VllmConfig ’ ATOM Config, compile policies</text>
+  <rect x="380" y="414" width="290" height="52" rx="14" fill="#0e1626" stroke="#3a2a55" stroke-width="1.2"/>
+  <text x="396" y="436" fill="#f0f4fa" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Config Translation</text>
+  <text x="396" y="454" fill="#b8c8de" font-family="Segoe UI, Arial, sans-serif" font-size="12">VllmConfig to ATOM Config, compile policies</text>
 
-  <rect x="690" y="414" width="340" height="52" class="itemBox"/>
-  <text x="706" y="436" class="itemTitle">Metadata Builders</text>
-  <text x="706" y="454" class="itemBody">Decorator-based class transform for CUDAGraph compat</text>
+  <rect x="690" y="414" width="340" height="52" rx="14" fill="#0e1626" stroke="#3a2a55" stroke-width="1.2"/>
+  <text x="706" y="436" fill="#f0f4fa" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Metadata Builders</text>
+  <text x="706" y="454" fill="#b8c8de" font-family="Segoe UI, Arial, sans-serif" font-size="12">Decorator-based class transform, CUDAGraph compat</text>
 
-  <!-- Flow arrow 2’3 -->
-  <line x1="550" y1="487" x2="550" y2="515" class="flowArrow"/>
-  <text x="580" y="505" class="flowLabel">kernel calls</text>
+  <line x1="550" y1="487" x2="550" y2="515" stroke="#556680" stroke-width="3" stroke-dasharray="8 4" marker-end="url(#ad)"/>
+  <text x="590" y="505" fill="#667a95" font-family="Segoe UI, Arial, sans-serif" font-size="12" font-weight="500">kernel calls</text>
 
-  <!-- PPPPPPPPPPP LAYER 3: AITER PPPPPPPPPPP -->
-  <rect x="50" y="520" width="1000" height="160" rx="22" fill="url(#layerGreen)" class="layerBox layerBoxGreen"/>
-  <rect x="70" y="532" width="120" height="32" rx="10" fill="url(#headerGreen)" class="headerBadge"/>
-  <text x="130" y="554" text-anchor="middle" class="layerName" style="font-size:16px; fill:#fff;">AITER</text>
-  <text x="210" y="554" class="layerSub">GPU Kernel Library</text>
+  <!-- LAYER 3: AITER -->
+  <rect x="50" y="520" width="1000" height="160" rx="22" fill="url(#layerGreen)" stroke="#2a6050" stroke-width="1.5" filter="url(#sh)"/>
+  <rect x="70" y="532" width="120" height="32" rx="10" fill="url(#hdrGreen)" filter="url(#sh)"/>
+  <text x="130" y="554" text-anchor="middle" fill="#ffffff" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="700">AITER</text>
+  <text x="210" y="554" fill="#90d8b8" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="500">GPU Kernel Library</text>
 
-  <!-- AITER items -->
-  <rect x="70" y="574" width="180" height="52" class="itemBox"/>
-  <text x="86" y="596" class="itemTitle">Flash Attention</text>
-  <text x="86" y="614" class="itemBody">Paged decode, chunked prefill</text>
+  <rect x="70" y="574" width="180" height="52" rx="14" fill="#0e1626" stroke="#1e4038" stroke-width="1.2"/>
+  <text x="86" y="596" fill="#f0f4fa" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Flash Attention</text>
+  <text x="86" y="614" fill="#b8c8de" font-family="Segoe UI, Arial, sans-serif" font-size="12">Paged decode, chunked prefill</text>
 
-  <rect x="268" y="574" width="180" height="52" class="itemBox"/>
-  <text x="284" y="596" class="itemTitle">Fused MoE</text>
-  <text x="284" y="614" class="itemBody">Expert routing, MORI comm</text>
+  <rect x="268" y="574" width="180" height="52" rx="14" fill="#0e1626" stroke="#1e4038" stroke-width="1.2"/>
+  <text x="284" y="596" fill="#f0f4fa" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Fused MoE</text>
+  <text x="284" y="614" fill="#b8c8de" font-family="Segoe UI, Arial, sans-serif" font-size="12">Expert routing, MORI comm</text>
 
-  <rect x="466" y="574" width="180" height="52" class="itemBox"/>
-  <text x="482" y="596" class="itemTitle">Quantized GEMM</text>
-  <text x="482" y="614" class="itemBody">FP8, FP4 (MXFP4), batched</text>
+  <rect x="466" y="574" width="180" height="52" rx="14" fill="#0e1626" stroke="#1e4038" stroke-width="1.2"/>
+  <text x="482" y="596" fill="#f0f4fa" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Quantized GEMM</text>
+  <text x="482" y="614" fill="#b8c8de" font-family="Segoe UI, Arial, sans-serif" font-size="12">FP8, FP4 (MXFP4), batched</text>
 
-  <rect x="664" y="574" width="180" height="52" class="itemBox"/>
-  <text x="680" y="596" class="itemTitle">RoPE + Cache Fusion</text>
-  <text x="680" y="614" class="itemBody">QK-norm+RoPE+cache+quant</text>
+  <rect x="664" y="574" width="180" height="52" rx="14" fill="#0e1626" stroke="#1e4038" stroke-width="1.2"/>
+  <text x="680" y="596" fill="#f0f4fa" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">RoPE + Cache Fusion</text>
+  <text x="680" y="614" fill="#b8c8de" font-family="Segoe UI, Arial, sans-serif" font-size="12">QK-norm+RoPE+cache+quant</text>
 
-  <rect x="862" y="574" width="168" height="52" class="itemBox"/>
-  <text x="878" y="596" class="itemTitle">Custom AllReduce</text>
-  <text x="878" y="614" class="itemBody">TP/EP collectives</text>
+  <rect x="862" y="574" width="168" height="52" rx="14" fill="#0e1626" stroke="#1e4038" stroke-width="1.2"/>
+  <text x="878" y="596" fill="#f0f4fa" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">Custom AllReduce</text>
+  <text x="878" y="614" fill="#b8c8de" font-family="Segoe UI, Arial, sans-serif" font-size="12">TP/EP collectives</text>
 
-  <text x="70" y="660" class="itemBody" style="fill:rgba(114,237,192,0.6); font-style:italic;">Triton &amp; HIP kernels optimized for AMD CDNA architecture</text>
+  <text x="70" y="660" fill="#3a9070" font-family="Segoe UI, Arial, sans-serif" font-size="12" font-style="italic">Triton and HIP kernels optimized for AMD CDNA architecture</text>
 
-  <!-- Flow arrow 3’4 -->
-  <line x1="550" y1="682" x2="550" y2="710" class="flowArrow"/>
-  <text x="580" y="700" class="flowLabel">HIP / ROCm</text>
+  <line x1="550" y1="682" x2="550" y2="710" stroke="#556680" stroke-width="3" stroke-dasharray="8 4" marker-end="url(#ad)"/>
+  <text x="590" y="700" fill="#667a95" font-family="Segoe UI, Arial, sans-serif" font-size="12" font-weight="500">HIP / ROCm</text>
 
-  <!-- PPPPPPPPPPP LAYER 4: AMD Hardware PPPPPPPPPPP -->
-  <rect x="50" y="715" width="1000" height="170" rx="22" fill="url(#layerRed)" class="layerBox layerBoxRed"/>
-  <rect x="70" y="727" width="200" height="32" rx="10" fill="url(#headerRed)" class="headerBadge"/>
-  <text x="170" y="749" text-anchor="middle" class="layerName" style="font-size:16px; fill:#fff;">AMD Hardware</text>
-  <text x="290" y="749" class="layerSub">Instinct GPU Accelerators</text>
+  <!-- LAYER 4: AMD Hardware -->
+  <rect x="50" y="715" width="1000" height="170" rx="22" fill="url(#layerRed)" stroke="#803030" stroke-width="1.5" filter="url(#sh)"/>
+  <rect x="70" y="727" width="200" height="32" rx="10" fill="url(#hdrRed)" filter="url(#sh)"/>
+  <text x="170" y="749" text-anchor="middle" fill="#ffffff" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="700">AMD Hardware</text>
+  <text x="290" y="749" fill="#e0a0a0" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="500">Instinct GPU Accelerators</text>
 
-  <!-- Hardware items -->
-  <rect x="70" y="770" width="290" height="52" class="itemBox"/>
-  <text x="86" y="792" class="itemTitle">MI300X  ·  CDNA 3 (gfx942)</text>
-  <text x="86" y="810" class="itemBody">192 GB HBM3 · 8 XCDs · 5.3 TB/s bandwidth</text>
+  <rect x="70" y="770" width="290" height="52" rx="14" fill="#0e1626" stroke="#502828" stroke-width="1.2"/>
+  <text x="86" y="792" fill="#f0f4fa" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">MI300X / CDNA 3 (gfx942)</text>
+  <text x="86" y="810" fill="#b8c8de" font-family="Segoe UI, Arial, sans-serif" font-size="12">192 GB HBM3, 8 XCDs, 5.3 TB/s bandwidth</text>
 
-  <rect x="380" y="770" width="290" height="52" class="itemBox"/>
-  <text x="396" y="792" class="itemTitle">MI355X  ·  CDNA 4 (gfx950)</text>
-  <text x="396" y="810" class="itemBody">288 GB HBM3e · Native FP4 · 8 TB/s bandwidth</text>
+  <rect x="380" y="770" width="290" height="52" rx="14" fill="#0e1626" stroke="#502828" stroke-width="1.2"/>
+  <text x="396" y="792" fill="#f0f4fa" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">MI355X / CDNA 4 (gfx950)</text>
+  <text x="396" y="810" fill="#b8c8de" font-family="Segoe UI, Arial, sans-serif" font-size="12">288 GB HBM3e, Native FP4, 8 TB/s bandwidth</text>
 
-  <rect x="690" y="770" width="340" height="52" class="itemBox"/>
-  <text x="706" y="792" class="itemTitle">MI400  ·  Next-Gen</text>
-  <text x="706" y="810" class="itemBody">Rack-scale interconnect · Ultra-high bandwidth</text>
+  <rect x="690" y="770" width="340" height="52" rx="14" fill="#0e1626" stroke="#502828" stroke-width="1.2"/>
+  <text x="706" y="792" fill="#f0f4fa" font-family="Segoe UI, Arial, sans-serif" font-size="14" font-weight="700">MI400 / Next-Gen</text>
+  <text x="706" y="810" fill="#b8c8de" font-family="Segoe UI, Arial, sans-serif" font-size="12">Rack-scale interconnect, ultra-high bandwidth</text>
 
-  <text x="70" y="862" class="itemBody" style="fill:rgba(255,107,107,0.6); font-style:italic;">ROCm platform  HIP runtime, hipBLAS, hipRAND, RCCL</text>
-
+  <text x="70" y="862" fill="#a05050" font-family="Segoe UI, Arial, sans-serif" font-size="12" font-style="italic">ROCm platform: HIP runtime, hipBLAS, hipRAND, RCCL</text>
 </svg>
