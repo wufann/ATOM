@@ -1,5 +1,7 @@
 # ATOM as vLLM Plugin Backend: Ecosystem Co-Evolution for AMD LLM Inference
 
+Authors:  Zejun Chen, Hattie Wu, Lingpeng Jin, Carlus Huang, Chuan Li, Peng Sun
+
 ## 1. Introduction
 
 LLM inference has long faced a core tension between hardware-specific optimization and framework compatibility. Maximizing performance on AMD Instinct GPUs needs deep hardware-aware kernel engineering, while production LLM serving overwhelmingly uses [vLLM](https://github.com/vllm-project/vllm) — the industry de facto standard — for its proven scheduling, memory management and API compatibility.
