@@ -10,6 +10,7 @@ import torch
 from aiter import ActivationType, QuantType, dtypes, get_hip_quant
 from aiter.dist.parallel_state import get_dp_group, get_tp_group
 from aiter.fused_moe import fused_moe
+from aiter.jit.core import ENABLE_CK
 from aiter.jit.utils.chip_info import get_gfx
 from aiter.jit.utils.torch_guard import torch_compile_guard
 from aiter.ops.shuffle import shuffle_scale_a16w4, shuffle_weight_a16w4
@@ -641,8 +642,9 @@ class Mxfp4MoEMethod(FusedMoEMethodBase):
             or self.quant_type == QuantType.per_1x32
         )
         gfx = get_gfx()
+        # When CK is disabled on gfx95, route MXFP4 MoE to the Triton path.
         self.use_triton = gfx.startswith("gfx94") or (
-            gfx.startswith("gfx95") and envs.ATOM_USE_TRITON_GEMM
+            gfx.startswith("gfx95") and (envs.ATOM_USE_TRITON_GEMM or not ENABLE_CK)
         )
         if self.use_triton:
             from atom.model_ops.utils import has_triton_kernels
@@ -764,6 +766,33 @@ class Mxfp4MoEMethod(FusedMoEMethodBase):
         if self.use_triton:
             from atom.model_ops.fused_moe_triton import _swizzle_mxfp4
             from triton_kernels.matmul_ogs import FlexCtx, PrecisionConfig
+
+            # Interleave w13 from concatenated [gate_all | up_all] to
+            # interleaved [gate0, up0, gate1, up1, ...] layout required
+            # by the fused SwiGLU activation in triton_kernels.
+            e, n, k = layer.w13_weight.shape
+            half_n = n // 2
+            layer.w13_weight.view(torch.uint8).copy_(
+                layer.w13_weight.data.view(torch.uint8)
+                .view(e, 2, half_n, k)
+                .permute(0, 2, 1, 3)
+                .contiguous()
+                .view(e, n, k)
+            )
+            scale_k = layer.w13_weight_scale.shape[-1]
+            layer.w13_weight_scale.data = (
+                layer.w13_weight_scale.data.view(e, 2, half_n, scale_k)
+                .permute(0, 2, 1, 3)
+                .contiguous()
+                .view(e, n, scale_k)
+            )
+            if layer.w13_bias is not None:
+                layer.w13_bias.data = (
+                    layer.w13_bias.data.view(-1, 2, half_n)
+                    .permute(0, 2, 1)
+                    .contiguous()
+                    .view(-1, n)
+                )
 
             w13_weight, w13_flex, w13_scale = _swizzle_mxfp4(
                 layer.w13_weight.view(torch.uint8),
