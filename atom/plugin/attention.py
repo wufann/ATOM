@@ -305,16 +305,22 @@ class vllmAttentionMetadataBuilderMethods:
             num_prefill_tokens,
         ) = split_ret
 
+        prefill_only = num_decodes == 0 and num_extends == 0 and num_prefills > 0
+
         query_start_loc_cpu = common_attn_metadata.query_start_loc_cpu
+
         seq_lens = common_attn_metadata.seq_lens.cpu()
         query_lens_cpu = query_start_loc_cpu[1:] - query_start_loc_cpu[:-1]
 
         decode_metadata = None
         if num_decodes > 0:
             decode_metadata = AiterFlashAttentionDecodeMetadata(
-                max_query_len=query_lens_cpu[:num_decodes].max().item(),
-                min_query_len=query_lens_cpu[:num_decodes].min().item(),
-                max_seq_len=seq_lens[:num_decodes].max().item(),
+                max_query_len=(
+                    query_lens_cpu[:num_decodes].max().item()
+                ),
+                max_seq_len=(
+                    seq_lens[:num_decodes].max().item()
+                ),
                 query_start_loc=common_attn_metadata.query_start_loc[: num_decodes + 1],
             )
 
