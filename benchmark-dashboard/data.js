@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1774597120128,
+  "lastUpdate": 1774620070368,
   "repoUrl": "https://github.com/ROCm/ATOM",
   "entries": {
     "Benchmark": [
@@ -42327,6 +42327,86 @@ window.BENCHMARK_DATA = {
           },
           {
             "name": "Kimi-K2.5-MXFP4 8192/1024 c=8 _gpu_count",
+            "value": 4,
+            "unit": ""
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Lingpeng Jin",
+            "username": "valarLip",
+            "email": "103567126+valarLip@users.noreply.github.com"
+          },
+          "committer": {
+            "name": "Lingpeng Jin",
+            "username": "valarLip",
+            "email": "103567126+valarLip@users.noreply.github.com"
+          },
+          "id": "252f56026e60da31807c16627f4975912da63ed8",
+          "message": "fix: run GPU metadata injection inside docker container\n\nThe benchmark result file is created inside the docker container and\nhas restrictive permissions on the host. Run the injection via\ndocker exec to avoid PermissionError.",
+          "timestamp": "2026-03-27T13:37:52Z",
+          "url": "https://github.com/ROCm/ATOM/commit/252f56026e60da31807c16627f4975912da63ed8"
+        },
+        "date": 1774620068697,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "MiniMax-M2.5 1024/1024 c=128 throughput (tok/s)",
+            "value": 3702.67,
+            "unit": "tok/s",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23648957658 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.0.2"
+          },
+          {
+            "name": "MiniMax-M2.5 1024/1024 c=128 Total Tput (tok/s)",
+            "value": 7413.48,
+            "unit": "tok/s",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23648957658 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.0.2"
+          },
+          {
+            "name": "MiniMax-M2.5 1024/1024 c=128 TTFT (ms)",
+            "value": 304.26,
+            "unit": "ms",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23648957658 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.0.2"
+          },
+          {
+            "name": "MiniMax-M2.5 1024/1024 c=128 TPOT (ms)",
+            "value": 33.38,
+            "unit": "ms",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23648957658 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.0.2"
+          },
+          {
+            "name": "MiniMax-M2.5 1024/1024 c=128 _gpu_count",
+            "value": 2,
+            "unit": ""
+          },
+          {
+            "name": "Kimi-K2.5-MXFP4 1024/1024 c=128 throughput (tok/s)",
+            "value": 3136.73,
+            "unit": "tok/s",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23648957658 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.1.1"
+          },
+          {
+            "name": "Kimi-K2.5-MXFP4 1024/1024 c=128 Total Tput (tok/s)",
+            "value": 6280.36,
+            "unit": "tok/s",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23648957658 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.1.1"
+          },
+          {
+            "name": "Kimi-K2.5-MXFP4 1024/1024 c=128 TTFT (ms)",
+            "value": 462.72,
+            "unit": "ms",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23648957658 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.1.1"
+          },
+          {
+            "name": "Kimi-K2.5-MXFP4 1024/1024 c=128 TPOT (ms)",
+            "value": 39.29,
+            "unit": "ms",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23648957658 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.1.1"
+          },
+          {
+            "name": "Kimi-K2.5-MXFP4 1024/1024 c=128 _gpu_count",
             "value": 4,
             "unit": ""
           }
