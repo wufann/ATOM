@@ -205,11 +205,19 @@ class MLASparseAttentionImplPluginModeMethods:
         k_c_normed = k_c_normed[:num_actual_toks, ...]
         k_pe = k_pe[:num_actual_toks, ...].unsqueeze(1)
 
-        atom_config = get_current_atom_config()
-        positions = atom_config.compilation_config.static_forward_context["positions"][
-            :num_actual_toks
-        ]
+        positions = None
+        if self._is_vllm_forward_context_available():
+            positions = self._get_vllm_forward_context().additional_kwargs.get(
+                "atom_positions"
+            )
 
+        if positions is None:
+            atom_config = get_current_atom_config()
+            positions = atom_config.compilation_config.static_forward_context[
+                "positions"
+            ]
+
+        positions = positions[:num_actual_toks]
         fp8_attention = self.kv_cache_dtype.startswith("fp8")
         if fp8_attention:
             from vllm.platforms import current_platform

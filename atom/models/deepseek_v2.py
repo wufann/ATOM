@@ -45,6 +45,7 @@ from aiter.ops.triton.fused_fp8_quant import (
     fused_reduce_rms_fp8_group_quant,
     fused_rms_fp8_group_quant,
 )
+from aiter import fused_qk_rmsnorm
 from aiter.ops.triton.fused_mxfp4_quant import (
     fused_reduce_rms_mxfp4_quant,
     fused_rms_mxfp4_quant,
@@ -110,6 +111,7 @@ if use_triton_gemm():
         gemm_a16w8_blockscale_preshuffle = None
 
 ENABLE_DS_QKNORM_QUANT_FUSION = envs.ATOM_ENABLE_DS_QKNORM_QUANT_FUSION
+ENABLE_DS_QKNORM_FUSION = envs.ATOM_ENABLE_DS_QKNORM_FUSION
 ENABLE_ALLREDUCE_RMSNORM_FUSION = envs.ATOM_ENABLE_ALLREDUCE_RMSNORM_FUSION
 ENABLE_DS_INPUT_RMSNORM_QUANT_FUSION = envs.ATOM_ENABLE_DS_INPUT_RMSNORM_QUANT_FUSION
 
@@ -733,12 +735,13 @@ def maybe_dual_stream_forward(
     """Dual-stream MoE forward: shared experts on alt stream, routed on main."""
     atom_config = get_current_atom_config()
     self = atom_config.compilation_config.static_forward_context[layer_name]
-    DUAL_STREAM_TOKEN_THRESHOLD = 1024
+    DUAL_STREAM_TOKEN_THRESHOLD = envs.ATOM_DUAL_STREAM_MOE_TOKEN_THRESHOLD
     num_tokens, hidden_dim = hidden_states.shape
     if (
         self._use_dual_stream
         and num_tokens > 0
         and num_tokens <= DUAL_STREAM_TOKEN_THRESHOLD
+        # and not get_forward_context().context.is_prefill
     ):
         return self.dual_stream_moe_forward(hidden_states)
     else:
@@ -762,14 +765,6 @@ direct_register_custom_op(
 
 
 class DeepseekV2MoE(nn.Module):
-    # Using a single shared stream avoids exhausting GPU/HSA resources
-    _shared_alt_stream: Optional[torch.cuda.Stream] = None
-
-    @staticmethod
-    def _get_shared_stream() -> torch.cuda.Stream:
-        if DeepseekV2MoE._shared_alt_stream is None:
-            DeepseekV2MoE._shared_alt_stream = torch.cuda.Stream()
-        return DeepseekV2MoE._shared_alt_stream
 
     def __init__(
         self,
@@ -777,6 +772,7 @@ class DeepseekV2MoE(nn.Module):
         quant_config: Optional[QuantizationConfig] = None,
         reduce_results: bool = True,
         prefix: str = "",
+        alt_stream: Optional[torch.cuda.Stream] = None,
     ):
         super().__init__()
         self.tp_size = get_tensor_model_parallel_world_size()
@@ -826,15 +822,15 @@ class DeepseekV2MoE(nn.Module):
         # computation using a separate CUDA stream. Registered as a custom op
         # (dual_stream_moe_forward) so it is opaque to torch.compile/Dynamo.
         self._use_dual_stream = False
-        self.alt_stream: Optional[torch.cuda.Stream] = None
+        self.alt_stream = alt_stream
         self.prefix = prefix
 
         if config.n_shared_experts is not None:
             if not is_rocm_aiter_fusion_shared_expert_enabled():
-                self._use_dual_stream = True
-                self.alt_stream = DeepseekV2MoE._get_shared_stream()
-                compilation_config = get_current_atom_config().compilation_config
-                compilation_config.static_forward_context[prefix] = self
+                if envs.ATOM_DUAL_STREAM_MOE_TOKEN_THRESHOLD > 0:
+                    self._use_dual_stream = True
+                    compilation_config = get_current_atom_config().compilation_config
+                    compilation_config.static_forward_context[prefix] = self
                 intermediate_size = (
                     config.moe_intermediate_size * config.n_shared_experts
                 )
@@ -880,9 +876,12 @@ class DeepseekV2MoE(nn.Module):
         alt_stream = self.alt_stream
 
         alt_stream.wait_stream(current_stream)
+
         with torch.cuda.stream(alt_stream):
-            shared_output = self.shared_experts(hidden_states)
-        final_hidden_states = self.routed_expert_forward(hidden_states)
+            final_hidden_states = self.routed_expert_forward(hidden_states)
+
+        shared_output = self.shared_experts(hidden_states)
+
         current_stream.wait_stream(alt_stream)
 
         final_hidden_states = self.combine_outputs(
@@ -1453,6 +1452,8 @@ class DeepseekV2MLAAttention(nn.Module):
         self.prefix = prefix
         self.quant_dtype = None
         self.fuse_qknorm_quant = False
+        # always fuse qknorm
+        self.fuse_qknorm = ENABLE_DS_QKNORM_FUSION
         if quant_config is not None and ENABLE_DS_QKNORM_QUANT_FUSION:
             if layer_quant_dtype == dtypes.fp8 or (
                 layer_quant_dtype == dtypes.fp4x2 and use_triton_gemm()
@@ -1524,6 +1525,16 @@ class DeepseekV2MLAAttention(nn.Module):
                         output_unquantized_inp1=False,
                         transpose_scale=True,
                     )
+                elif self.fuse_qknorm:
+                    hidden_states_or_q_c, kv_c_normed = fused_qk_rmsnorm(
+                        q_c,
+                        self.q_a_layernorm.weight,
+                        self.q_a_layernorm.eps,
+                        kv_c,
+                        self.kv_a_layernorm.weight,
+                        self.kv_a_layernorm.eps,
+                    )
+                    hidden_states_or_q_c_scale = None
                 else:
                     hidden_states_or_q_c = self.q_a_layernorm(q_c)
         else:
@@ -1533,7 +1544,7 @@ class DeepseekV2MLAAttention(nn.Module):
                 [self.kv_lora_rank, self.qk_rope_head_dim],
                 dim=-1,
             )
-        if not self.fuse_qknorm_quant:
+        if not self.fuse_qknorm_quant and not self.fuse_qknorm:
             kv_c_normed = self.kv_a_layernorm(kv_c)
             hidden_states_or_q_c_scale = None
         if self.is_v32 and self.indexer is not None:
@@ -1565,6 +1576,7 @@ class DeepseekV2DecoderLayer(nn.Module):
         quant_config: Optional[QuantizationConfig] = None,
         layer_num: int = 0,
         is_mtp_block: bool = False,
+        alt_stream: Optional[torch.cuda.Stream] = None,
     ) -> None:
         super().__init__()
         self.hidden_size = config.hidden_size
@@ -1630,6 +1642,7 @@ class DeepseekV2DecoderLayer(nn.Module):
                 quant_config=quant_config,
                 reduce_results=not self.fuse_ar_input_norm,
                 prefix=f"{prefix}.mlp",
+                alt_stream=alt_stream,
             )
         else:
             self.mlp = DeepseekV2MLP(
@@ -1781,6 +1794,11 @@ class DeepseekV2Model(nn.Module):
         else:
             self.embed_tokens = PPMissingLayer()
 
+        self.alt_stream: Optional[torch.cuda.Stream] = None
+        if getattr(config, "n_shared_experts", None) is not None:
+            self.alt_stream = torch.cuda.Stream()
+
+        _alt_stream = self.alt_stream
         self.start_layer, self.end_layer, self.layers = make_layers(
             config.num_hidden_layers,
             lambda prefix, layer_num=None: DeepseekV2DecoderLayer(
@@ -1790,6 +1808,7 @@ class DeepseekV2Model(nn.Module):
                 cache_config=cache_config,
                 quant_config=quant_config,
                 layer_num=layer_num,
+                alt_stream=_alt_stream,
             ),
             prefix=f"{prefix}.layers",
             layer_num_offset=0,
