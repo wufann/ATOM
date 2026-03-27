@@ -377,7 +377,9 @@ class GptOssForCausalLM(nn.Module):
         "gate_up_proj_blocks": "w13_weight",
         "down_proj_blocks": "w2_weight",
         "gate_up_proj_scales": "w13_weight_scale",
+        "gate_up_proj_input_scale": "w13_input_scale",
         "down_proj_scales": "w2_weight_scale",
+        "down_proj_input_scale": "w2_input_scale",
         # MoE other weights
         "gate_up_proj": "w13_weight",
         "down_proj": "w2_weight",
