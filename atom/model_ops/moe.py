@@ -771,33 +771,6 @@ class Mxfp4MoEMethod(FusedMoEMethodBase):
             from atom.model_ops.fused_moe_triton import _swizzle_mxfp4
             from triton_kernels.matmul_ogs import FlexCtx, PrecisionConfig
 
-            # Interleave w13 from concatenated [gate_all | up_all] to
-            # interleaved [gate0, up0, gate1, up1, ...] layout required
-            # by the fused SwiGLU activation in triton_kernels.
-            e, n, k = layer.w13_weight.shape
-            half_n = n // 2
-            layer.w13_weight.view(torch.uint8).copy_(
-                layer.w13_weight.data.view(torch.uint8)
-                .view(e, 2, half_n, k)
-                .permute(0, 2, 1, 3)
-                .contiguous()
-                .view(e, n, k)
-            )
-            scale_k = layer.w13_weight_scale.shape[-1]
-            layer.w13_weight_scale.data = (
-                layer.w13_weight_scale.data.view(e, 2, half_n, scale_k)
-                .permute(0, 2, 1, 3)
-                .contiguous()
-                .view(e, n, scale_k)
-            )
-            if layer.w13_bias is not None:
-                layer.w13_bias.data = (
-                    layer.w13_bias.data.view(-1, 2, half_n)
-                    .permute(0, 2, 1)
-                    .contiguous()
-                    .view(-1, n)
-                )
-
             w13_weight, w13_flex, w13_scale = _swizzle_mxfp4(
                 layer.w13_weight.view(torch.uint8),
                 layer.w13_weight_scale,
