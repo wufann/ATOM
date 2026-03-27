@@ -398,82 +398,84 @@ class LinearBase(nn.Module):
     def forward(
         self, x: torch.Tensor, x_scale: Optional[torch.Tensor] = None, otype=dtypes.bf16
     ) -> torch.Tensor:
-        if self.quant_type.value == QuantType.No.value:
-            y = tgemm.mm(
-                x,
-                self.weight,
-                self.bias,
-                otype=otype,
-            )
-        else:
-            if x_scale is None:
-                quant_func = self.quant_func
-                if self.quant_type.value == QuantType.per_1x128.value:
-                    quant_func = functools_partial(
-                        self.quant_func, transpose_scale=True
-                    )
-                if self.quant_type.value != QuantType.per_1x32.value:
-                    x, x_scale = quant_func(
-                        x,
-                        quant_dtype=self.params_dtype,
-                        scale=getattr(self, "input_scale", None),
-                    )
-            if self.quant_type.value == QuantType.per_Tensor.value:
+        from torch.profiler import record_function as _rf
+        with _rf(f"{self.prefix}[x={tuple(x.shape)} w={tuple(self.weight.shape)} dtype={self.params_dtype}]"):
+            if self.quant_type.value == QuantType.No.value:
                 y = tgemm.mm(
                     x,
                     self.weight,
                     self.bias,
                     otype=otype,
-                    scale_a=x_scale,
-                    scale_b=self.weight_scale,
                 )
-            elif self.quant_type.value == QuantType.per_Token.value:
-                if self.params_dtype == dtypes.i8:
-                    y = gemm_a8w8(
+            else:
+                if x_scale is None:
+                    quant_func = self.quant_func
+                    if self.quant_type.value == QuantType.per_1x128.value:
+                        quant_func = functools_partial(
+                            self.quant_func, transpose_scale=True
+                        )
+                    if self.quant_type.value != QuantType.per_1x32.value:
+                        x, x_scale = quant_func(
+                            x,
+                            quant_dtype=self.params_dtype,
+                            scale=getattr(self, "input_scale", None),
+                        )
+                if self.quant_type.value == QuantType.per_Tensor.value:
+                    y = tgemm.mm(
                         x,
                         self.weight,
-                        x_scale,
-                        self.weight_scale,
                         self.bias,
-                        dtype=otype,
+                        otype=otype,
+                        scale_a=x_scale,
+                        scale_b=self.weight_scale,
                     )
-                else:
-                    y = gemm_a8w8_bpreshuffle(
+                elif self.quant_type.value == QuantType.per_Token.value:
+                    if self.params_dtype == dtypes.i8:
+                        y = gemm_a8w8(
+                            x,
+                            self.weight,
+                            x_scale,
+                            self.weight_scale,
+                            self.bias,
+                            dtype=otype,
+                        )
+                    else:
+                        y = gemm_a8w8_bpreshuffle(
+                            x,
+                            self.weight,
+                            x_scale,
+                            self.weight_scale,
+                            dtype=otype,
+                        )
+                        if self.bias is not None:
+                            y += self.bias
+                elif self.quant_type.value == QuantType.per_1x128.value:
+                    y = gemm_a8w8_blockscale_preshuffle_impl(
                         x,
                         self.weight,
                         x_scale,
                         self.weight_scale,
                         dtype=otype,
+                        prefix=self.prefix,
                     )
                     if self.bias is not None:
                         y += self.bias
-            elif self.quant_type.value == QuantType.per_1x128.value:
-                y = gemm_a8w8_blockscale_preshuffle_impl(
-                    x,
-                    self.weight,
-                    x_scale,
-                    self.weight_scale,
-                    dtype=otype,
-                    prefix=self.prefix,
-                )
-                if self.bias is not None:
-                    y += self.bias
-            elif self.quant_type.value == QuantType.per_1x32.value:
-                y = gemm_a4w4_quant(
-                    x,
-                    x_scale,
-                    self.weight,
-                    otype,
-                    self.weight_scale.data,
-                    self.params_dtype,
-                    getattr(self, "input_scale", None),
-                    self.output_size,
-                )
-                if self.bias is not None:
-                    y += self.bias
-        if self.tp_dim == 1 and self.tp_size > 1 and self.reduce_results:
-            y = get_tp_group().all_reduce(y, ca_fp8_quant=False)
-        return y
+                elif self.quant_type.value == QuantType.per_1x32.value:
+                    y = gemm_a4w4_quant(
+                        x,
+                        x_scale,
+                        self.weight,
+                        otype,
+                        self.weight_scale.data,
+                        self.params_dtype,
+                        getattr(self, "input_scale", None),
+                        self.output_size,
+                    )
+                    if self.bias is not None:
+                        y += self.bias
+            if self.tp_dim == 1 and self.tp_size > 1 and self.reduce_results:
+                y = get_tp_group().all_reduce(y, ca_fp8_quant=False)
+            return y
 
 
 class ReplicatedLinear(LinearBase):

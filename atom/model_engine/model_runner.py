@@ -508,6 +508,7 @@ class ModelRunner:
         # Initialize profiler for this rank
         self.profiler = None
         self.profiler_dir = None
+        self._perfetto_output_path = None  # rank-specific path for ATOM_PERFETTO_OUTPUT
         if config.torch_profiler_dir is not None:
             # Create rank-specific profiler directory
             if dp_rank_local > 0 or config.parallel_config.data_parallel_size > 1:
@@ -515,6 +516,16 @@ class ModelRunner:
             else:
                 rank_name = f"rank_{rank}"
             self.profiler_dir = os.path.join(config.torch_profiler_dir, rank_name)
+            os.makedirs(self.profiler_dir, exist_ok=True)
+        perfetto_output = envs.ATOM_PERFETTO_OUTPUT
+        if perfetto_output:
+            # Derive per-rank output path: /path/trace.json -> /path/trace_rank0.json
+            base, ext = os.path.splitext(perfetto_output)
+            if not ext:
+                ext = ".json"
+            self._perfetto_output_path = f"{base}_rank{rank}{ext}"
+            # Reuse profiler_dir infrastructure: write to the same directory
+            self.profiler_dir = os.path.dirname(os.path.abspath(self._perfetto_output_path))
             os.makedirs(self.profiler_dir, exist_ok=True)
 
         self.graph_bs = [0]  # for eager fallback
@@ -592,6 +603,13 @@ class ModelRunner:
         self.warmup_model()
         logger.info(f"Model warmup done: {config.model}")
 
+        # Auto-start profiler when ATOM_PERFETTO_OUTPUT is set
+        if self._perfetto_output_path is not None:
+            self.start_profiler()
+            logger.info(
+                f"Perfetto profiler started; trace will be saved to: {self._perfetto_output_path}"
+            )
+
         torch.set_default_device("cpu")
         torch.set_default_dtype(default_dtype)
 
@@ -664,6 +682,9 @@ class ModelRunner:
         if not self.still_running:
             return
         self.still_running = False
+        # Stop profiler before tearing down distributed env so CUDA ops still work.
+        if self._perfetto_output_path is not None and self.profiler is not None:
+            self.stop_profiler()
         # 1. Destroy distributed env (NCCL + CustomAllreduce + process groups)
         #    Must happen while ops module is still alive for CustomAllreduce cleanup.
         destroy_dist_env()
@@ -712,8 +733,17 @@ class ModelRunner:
                     worker_name = f"{worker_name}_{safe_model_name}"
             output_prefix = os.path.join(self.profiler_dir, worker_name)
 
+            # When ATOM_PERFETTO_OUTPUT is set, write directly to that path
+            # (uncompressed JSON, readable by Perfetto UI).  Otherwise keep the
+            # existing timestamped .pt.trace.json.gz behaviour.
+            perfetto_path = self._perfetto_output_path
+
             def _on_trace_ready(prof):
-                # Use a short human-readable timestamp in file name.
+                if perfetto_path is not None:
+                    prof.export_chrome_trace(perfetto_path)
+                    logger.info(f"Perfetto trace saved: {perfetto_path}")
+                    return
+                # Default: timestamped gzip
                 ts = time.strftime("%Y%m%d_%H%M%S", time.localtime())
                 ms = int((time.time() % 1) * 1000)
                 output_path = f"{output_prefix}_ts_{ts}_{ms:03d}.pt.trace.json.gz"

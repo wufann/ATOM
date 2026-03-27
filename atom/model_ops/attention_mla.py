@@ -614,6 +614,22 @@ class MLAAttention(nn.Module):
         positions: torch.Tensor = None,
         q_scale: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
+        from torch.profiler import record_function as _rf
+        _prf = _rf(f"attention_mla[q={tuple(q.shape)} nheads={self.num_heads} head_dim={self.qk_head_dim} nkv_nope={self.qk_nope_head_dim}]")
+        _prf.__enter__()
+        try:
+            return self._forward_impl_server_mode_body(q, k_nope, k_rope, positions, q_scale)
+        finally:
+            _prf.__exit__(None, None, None)
+
+    def _forward_impl_server_mode_body(
+        self,
+        q: torch.Tensor,
+        k_nope: torch.Tensor,
+        k_rope: torch.Tensor,
+        positions: torch.Tensor = None,
+        q_scale: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
         # kv_cache = self.kv_cache
         forward_context: ForwardContext = get_forward_context()
         attn_metadata = forward_context.attn_metadata

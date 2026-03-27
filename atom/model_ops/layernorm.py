@@ -205,6 +205,16 @@ class RMSNorm(nn.Module):
         residual: torch.Tensor | None = None,
         x_scale: Optional[torch.Tensor] = None,
     ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
+        from torch.profiler import record_function as _rf
+        with _rf(f"rmsnorm[x={tuple(x.shape)} dim={self.dim}]"):
+            return self._forward_impl(x, residual, x_scale)
+
+    def _forward_impl(
+        self,
+        x: torch.Tensor,
+        residual: torch.Tensor | None = None,
+        x_scale: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
         if self.x_pad_to_multiple > 0:
             assert (
                 not self.fused_allreduce
@@ -514,9 +524,11 @@ class LayerNorm(nn.Module):
         x: torch.Tensor,
         residual: torch.Tensor | None = None,
     ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
-        if residual is None:
-            return layernorm2d_fwd_(x, self.weight, self.bias, self.eps, self.dim)
-        else:
-            return layernorm2d_fwd_with_add_(
-                x, self.weight, residual, self.bias, self.eps, self.dim
-            )
+        from torch.profiler import record_function as _rf
+        with _rf(f"layernorm[x={tuple(x.shape)} dim={self.dim}]"):
+            if residual is None:
+                return layernorm2d_fwd_(x, self.weight, self.bias, self.eps, self.dim)
+            else:
+                return layernorm2d_fwd_with_add_(
+                    x, self.weight, residual, self.bias, self.eps, self.dim
+                )

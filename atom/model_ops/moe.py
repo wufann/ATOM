@@ -2598,6 +2598,11 @@ class FusedMoE(torch.nn.Module):
         return final_hidden_states
 
     def forward_impl(self, hidden_states: torch.Tensor, router_logits: torch.Tensor):
+        from torch.profiler import record_function as _rf
+        with _rf(f"{self.layer_name}[tokens={hidden_states.shape[0]} hidden={hidden_states.shape[1]} experts={self.global_num_experts} topk={self.top_k}]"):
+            return self._forward_impl_body(hidden_states, router_logits)
+
+    def _forward_impl_body(self, hidden_states: torch.Tensor, router_logits: torch.Tensor):
         assert self.quant_method is not None
         # cuda graph not supported forward with combine and dispatch
         if self.use_chunked:

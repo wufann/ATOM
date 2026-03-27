@@ -66,6 +66,10 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # --- Profiling & Logging ---
     "ATOM_TORCH_PROFILER_DIR": lambda: os.getenv("ATOM_TORCH_PROFILER_DIR", None),
     "ATOM_PROFILER_MORE": lambda: os.getenv("ATOM_PROFILER_MORE", "0") == "1",
+    # Path for a Perfetto-compatible trace file. When set, the server auto-starts
+    # the torch profiler and writes a Chrome-format JSON trace on shutdown.
+    # For multi-rank runs, rank N writes <stem>_rank<N><ext> (e.g. trace_rank0.json).
+    "ATOM_PERFETTO_OUTPUT": lambda: os.getenv("ATOM_PERFETTO_OUTPUT", ""),
     "ATOM_LOG_MORE": lambda: int(os.getenv("ATOM_LOG_MORE", "0")) != 0,
     # --- Model Loading ---
     "ATOM_DISABLE_MMAP": lambda: os.getenv("ATOM_DISABLE_MMAP", "false").lower()

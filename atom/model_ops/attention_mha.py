@@ -91,31 +91,32 @@ class PagedAttentionImpl(nn.Module):
         q_scale: torch.Tensor = None,
         qkv: torch.Tensor = None,
     ):
+        from torch.profiler import record_function as _rf
+        with _rf(f"attention_mha[q={tuple(q.shape)} nheads={self.num_heads} head_dim={self.head_dim} nkv={self.num_kv_heads}]"):
+            fwd_ctx: ForwardContext = get_forward_context()
 
-        fwd_ctx: ForwardContext = get_forward_context()
+            # dummy run will skip attention in cuda graph capture phase
+            if fwd_ctx.context.is_dummy_run:
+                o = torch.empty_like(q)
+                return o
 
-        # dummy run will skip attention in cuda graph capture phase
-        if fwd_ctx.context.is_dummy_run:
-            o = torch.empty_like(q)
+            o: torch.Tensor
+            q = q.view(-1, self.num_heads, self.head_dim)
+            k = k.view(-1, self.num_kv_heads, self.head_dim)
+            v = v.view(-1, self.num_kv_heads, self.head_dim)
+
+            # rope cache
+            q, k, v, k_cache, v_cache, k_scale, v_scale = self.rope_cache(
+                q, k, v, qkv, position, fwd_ctx
+            )
+
+            attn_impl = self.dispatch_backend(fwd_ctx)
+
+            o = attn_impl(q, k, v, k_cache, v_cache, k_scale, v_scale, fwd_ctx)
+
+            o = o.view(-1, self.num_heads * self.head_dim)
+
             return o
-
-        o: torch.Tensor
-        q = q.view(-1, self.num_heads, self.head_dim)
-        k = k.view(-1, self.num_kv_heads, self.head_dim)
-        v = v.view(-1, self.num_kv_heads, self.head_dim)
-
-        # rope cache
-        q, k, v, k_cache, v_cache, k_scale, v_scale = self.rope_cache(
-            q, k, v, qkv, position, fwd_ctx
-        )
-
-        attn_impl = self.dispatch_backend(fwd_ctx)
-
-        o = attn_impl(q, k, v, k_cache, v_cache, k_scale, v_scale, fwd_ctx)
-
-        o = o.view(-1, self.num_heads * self.head_dim)
-
-        return o
 
     @mark_trace(prefix="rope_cache", torch_compile=False)
     def rope_cache(self, q, k, v, qkv, position, fwd_ctx: ForwardContext):
