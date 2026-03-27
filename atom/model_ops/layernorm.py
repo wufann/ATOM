@@ -359,7 +359,6 @@ class RMSNormGated(nn.Module):
 
                 # Import kernel when needed
 
-
                 self.gated_rmsnorm_fp8_group_quant = gated_rmsnorm_fp8_group_quant
 
     def reset_parameters(self):
@@ -434,11 +433,17 @@ class RMSNormGated(nn.Module):
         """
         num_tokens, num_heads, head_dim = x.shape
         # Check kernel constraints
-        if self.group_size is not None or not self.norm_before_gate or head_dim != self.group_size_quant:
+        if (
+            self.group_size is not None
+            or not self.norm_before_gate
+            or head_dim != self.group_size_quant
+        ):
             # Grouped norm not supported by kernel, fallback
             return self.forward_native(x, z)
 
-        out_fp8 = torch.empty([num_tokens, num_heads * head_dim], dtype=aiter.dtypes.fp8, device=x.device)
+        out_fp8 = torch.empty(
+            [num_tokens, num_heads * head_dim], dtype=aiter.dtypes.fp8, device=x.device
+        )
         out_scales = torch.empty(
             [num_tokens, (num_heads * head_dim) // self.group_size_quant],
             dtype=torch.float,

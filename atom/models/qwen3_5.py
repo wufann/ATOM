@@ -1,7 +1,6 @@
 from collections.abc import Iterable
 
 import torch
-from einops import rearrange
 from torch import nn
 
 
