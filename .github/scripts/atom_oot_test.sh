@@ -15,7 +15,7 @@ set -euo pipefail
 #   accuracy - run gsm8k accuracy test and save result JSON
 #
 # MODE:
-#   ci    - DeepSeek-R1 FP8, gpt-oss-120b, Kimi-K2 TP4, Qwen3.5-35B-A3B-FP8
+#   ci    - DeepSeek-R1 FP8, gpt-oss-120b, Kimi-K2 TP4
 #   full  - all OOT-supported models
 #
 # Optional model_name can be used to run a single model in full mode.
