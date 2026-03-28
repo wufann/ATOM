@@ -444,7 +444,7 @@ function parseRunConfigs(run) {
   const configs = {}; // key: "backend|model|isl/osl|conc"
   for (const b of run.benches) {
     const p = parseBenchName(b.name);
-    if (!p || p.islOsl === '0/0') continue;
+    if (!p || p.isAccuracy || p.islOsl === '0/0') continue;
     const key = `${p.backend}|${p.model}|${p.islOsl}|${p.conc}`;
     if (!configs[key]) configs[key] = { backend: p.backend, model: p.model, islOsl: p.islOsl, conc: p.conc, commit: run.commit, date: run.date, runUrl: '' };
     configs[key][p.metric] = b.value;
