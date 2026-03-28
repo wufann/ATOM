@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1774709757616,
+  "lastUpdate": 1774718593917,
   "repoUrl": "https://github.com/ROCm/ATOM",
   "entries": {
     "Benchmark": [
@@ -44228,6 +44228,76 @@ window.BENCHMARK_DATA = {
             "value": 0.4177,
             "unit": "score",
             "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23686880329 | Threshold: 0.38 | BaselineModel: openai/gpt-oss-120b | BaselineNote: No public GSM8K baseline available | strict-match: 0.2138 | fewshot: 3 | Model: openai/gpt-oss-120b"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Peng",
+            "username": "sunway513",
+            "email": "peng.sun@amd.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "f70484dc80ece0ad575255374f4ae2e0523220a5",
+          "message": "test: add profiler regression guard for HIP graph replay (#432)\n\n* test: add profiler regression guard for HIP graph replay\n\nAdds a lightweight integration test (~3s) that detects rocprofiler-sdk\ninterception overhead which degrades HIP graph replay performance in the\ninference serving stack.\n\nWhen PyTorch kineto is linked against librocprofiler-sdk.so instead of\nlibroctracer64.so, every hipGraphLaunch incurs ~270us of overhead,\ndropping GPU occupancy from ~97% to ~75%. This directly impacts decode\nthroughput in TP>1 serving scenarios.\n\nTest checks:\n- libtorch_cpu.so links roctracer (not rocprofiler-sdk)\n- HIP graph replay GPU occupancy > 80% (healthy = 97%)\n- Inter-kernel gaps > 100us count <= 5 (healthy = 0)\n- hipGraphLaunch CPU time < 150us (healthy = 50us)\n\nValidated on MI355 with:\n- PASS: rocm/vllm-dev:base_custom_rocm_7.2.1_torch_triton_20260326_full_fix\n- FAIL: rocm/vllm-dev:base_custom_rocm_7.2.1_torch_triton_20260326 (stock)\n\nReference: ROCm/rocm-systems#4401, ROCm/pytorch#2579, ROCm/pytorch#3056\n\nCo-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>\n\n* style: fix black + ruff formatting\n\n---------\n\nCo-authored-by: Claude Opus 4.6 (1M context) <noreply@anthropic.com>",
+          "timestamp": "2026-03-28T14:06:38Z",
+          "url": "https://github.com/ROCm/ATOM/commit/f70484dc80ece0ad575255374f4ae2e0523220a5"
+        },
+        "date": 1774718592681,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ATOM::Kimi-K2.5-MXFP4 accuracy (GSM8K)",
+            "value": 0.9363,
+            "unit": "score",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23689073628 | Threshold: 0.93 | Baseline: 0.9409 | BaselineModel: moonshotai/Kimi-K2.5 | BaselineNote: HF: amd/Kimi-K2.5-MXFP4 card shows Kimi-K2.5 baseline=0.9409 | strict-match: 0.9356 | fewshot: 3 | Model: /models/amd/Kimi-K2.5-MXFP4"
+          },
+          {
+            "name": "ATOM::Llama-3.3-70B-Instruct-MXFP4-Preview accuracy (GSM8K)",
+            "value": 0.9045,
+            "unit": "score",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23689073628 | Threshold: 0.88 | BaselineModel: meta-llama/Llama-3.3-70B-Instruct | BaselineNote: HF page inaccessible; needs CI measurement of baseline | strict-match: 0.6096 | fewshot: 3 | Model: amd/Llama-3.3-70B-Instruct-MXFP4-Preview"
+          },
+          {
+            "name": "ATOM::Meta-Llama-3-8B-Instruct accuracy (GSM8K)",
+            "value": 0.7407,
+            "unit": "score",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23689073628 | Threshold: 0.73 | BaselineModel: meta-llama/Meta-Llama-3-8B-Instruct | BaselineNote: HF reports 0.796 but 8-shot CoT; CI uses 3-shot, not comparable | strict-match: 0.7422 | fewshot: 3 | Model: meta-llama/Meta-Llama-3-8B-Instruct"
+          },
+          {
+            "name": "ATOM::MiniMax-M2.5 accuracy (GSM8K)",
+            "value": 0.9303,
+            "unit": "score",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23689073628 | Threshold: 0.92 | Baseline: 0.9401 | BaselineModel: MiniMaxAI/MiniMax-M2.5 | BaselineNote: HF: amd/MiniMax-M2.5-MXFP4 card shows baseline=0.9401 | strict-match: 0.9272 | fewshot: 3 | Model: /models/MiniMaxAI/MiniMax-M2.5"
+          },
+          {
+            "name": "ATOM::Qwen3-235B-A22B-Instruct-2507-FP8 accuracy (GSM8K)",
+            "value": 0.9067,
+            "unit": "score",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23689073628 | Threshold: 0.87 | Baseline: 0.909 | BaselineModel: Qwen/Qwen3-235B-A22B-Instruct-2507 | BaselineNote: HF: amd/Qwen3-235B-A22B-Instruct-2507-MXFP4 card shows baseline=0.909 | strict-match: 0.8886 | fewshot: 3 | Model: /models/Qwen/Qwen3-235B-A22B-Instruct-2507-FP8"
+          },
+          {
+            "name": "ATOM::Qwen3-Next-80B-A3B-Thinking accuracy (GSM8K)",
+            "value": 0.6914,
+            "unit": "score",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23689073628 | Threshold: 0.65 | BaselineModel: Qwen/Qwen3-Next-80B-A3B-Thinking | BaselineNote: No public GSM8K baseline; HF card has no GSM8K | strict-match: 0.793 | fewshot: 3 | Model: /models/Qwen/Qwen3-Next-80B-A3B-Thinking"
+          },
+          {
+            "name": "ATOM::gpt-oss-120b accuracy (GSM8K)",
+            "value": 0.3995,
+            "unit": "score",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23689073628 | Threshold: 0.38 | BaselineModel: openai/gpt-oss-120b | BaselineNote: No public GSM8K baseline available | strict-match: 0.2358 | fewshot: 3 | Model: openai/gpt-oss-120b"
+          },
+          {
+            "name": "ATOM::gpt-oss-120b (2 GPUs) accuracy (GSM8K)",
+            "value": 0.4208,
+            "unit": "score",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23689073628 | Threshold: 0.38 | BaselineModel: openai/gpt-oss-120b | BaselineNote: No public GSM8K baseline available | strict-match: 0.2403 | fewshot: 3 | Model: openai/gpt-oss-120b"
           }
         ]
       }
