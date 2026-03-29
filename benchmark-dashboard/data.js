@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1774796399069,
+  "lastUpdate": 1774803422206,
   "repoUrl": "https://github.com/ROCm/ATOM",
   "entries": {
     "Benchmark": [
@@ -48190,6 +48190,64 @@ window.BENCHMARK_DATA = {
             "value": 0.4079,
             "unit": "score",
             "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23711160239 | Threshold: 0.38 | BaselineModel: openai/gpt-oss-120b | BaselineNote: No public GSM8K baseline available | strict-match: 0.213 | fewshot: 3 | Model: openai/gpt-oss-120b"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "zejunchen-zejun",
+            "username": "zejunchen-zejun",
+            "email": "zejun.chen@amd.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "0079204e23922ddca3b28a438610d29a82ea20bb",
+          "message": "[plugin][OOT Benchmark] Refine OOT benchmark(manual trigger) to cover key models (#409)\n\n* [plugin][oot benchmark] refine the OOT benchmark workflow\n\nSigned-off-by: zejunchen-zejun <zejun.chen@amd.com>\n\n* add model qwen3.5\nchange to manual trigger\nalign env and arguments\nchoice box default false\n\nSigned-off-by: zejunchen-zejun <zejun.chen@amd.com>\n\n* set 4 GPU machine for Kimi-K2 TP4\n\nSigned-off-by: zejunchen-zejun <zejun.chen@amd.com>\n\n* if the model has not been chosen, the gpu runner\nwill not be dispatched\n\nSigned-off-by: zejunchen-zejun <zejun.chen@amd.com>\n\n* change the config\n\nSigned-off-by: zejunchen-zejun <zejun.chen@amd.com>\n\n* remove redundant env flag for gptoss\n\nSigned-off-by: zejunchen-zejun <zejun.chen@amd.com>\n\n* add specific branch trigger OOT benchmark\nfor acceptance test when upgrading vLLM\n\nSigned-off-by: zejunchen-zejun <zejun.chen@amd.com>\n\n* change the oot benchmark behavior\n\nSigned-off-by: zejunchen-zejun <zejun.chen@amd.com>\n\n* refine the docker remove logic and rebuild logic\n\nSigned-off-by: zejunchen-zejun <zejun.chen@amd.com>\n\n* add Qwen3-Next into OOT benchmark\n\nSigned-off-by: zejunchen-zejun <zejun.chen@amd.com>\n\n* refine the summary workflow\n\nSigned-off-by: zejunchen-zejun <zejun.chen@amd.com>\n\n* change gptoss model to openai version\n\nSigned-off-by: zejunchen-zejun <zejun.chen@amd.com>\n\n* direct use the model weight, which has been downloaded\nonto the machine\n\nSigned-off-by: zejunchen-zejun <zejun.chen@amd.com>\n\n* change the model weight path\n\nSigned-off-by: zejunchen-zejun <zejun.chen@amd.com>\n\n* make lint happy\n\nSigned-off-by: zejunchen-zejun <zejun.chen@amd.com>\n\n---------\n\nSigned-off-by: zejunchen-zejun <zejun.chen@amd.com>",
+          "timestamp": "2026-03-29T14:23:30Z",
+          "url": "https://github.com/ROCm/ATOM/commit/0079204e23922ddca3b28a438610d29a82ea20bb"
+        },
+        "date": 1774803420288,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ATOM::Llama-3.3-70B-Instruct-MXFP4-Preview accuracy (GSM8K)",
+            "value": 0.9113,
+            "unit": "score",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23713292554 | Threshold: 0.88 | BaselineModel: meta-llama/Llama-3.3-70B-Instruct | BaselineNote: HF page inaccessible; needs CI measurement of baseline | strict-match: 0.6156 | fewshot: 3 | Model: amd/Llama-3.3-70B-Instruct-MXFP4-Preview"
+          },
+          {
+            "name": "ATOM::Meta-Llama-3-8B-Instruct accuracy (GSM8K)",
+            "value": 0.74,
+            "unit": "score",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23713292554 | Threshold: 0.73 | BaselineModel: meta-llama/Meta-Llama-3-8B-Instruct | BaselineNote: HF reports 0.796 but 8-shot CoT; CI uses 3-shot, not comparable | strict-match: 0.7407 | fewshot: 3 | Model: meta-llama/Meta-Llama-3-8B-Instruct"
+          },
+          {
+            "name": "ATOM::MiniMax-M2.5 accuracy (GSM8K)",
+            "value": 0.9272,
+            "unit": "score",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23713292554 | Threshold: 0.92 | Baseline: 0.9401 | BaselineModel: MiniMaxAI/MiniMax-M2.5 | BaselineNote: HF: amd/MiniMax-M2.5-MXFP4 card shows baseline=0.9401 | strict-match: 0.9257 | fewshot: 3 | Model: /models/MiniMaxAI/MiniMax-M2.5"
+          },
+          {
+            "name": "ATOM::Qwen3-Next-80B-A3B-Thinking accuracy (GSM8K)",
+            "value": 0.6937,
+            "unit": "score",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23713292554 | Threshold: 0.65 | BaselineModel: Qwen/Qwen3-Next-80B-A3B-Thinking | BaselineNote: No public GSM8K baseline; HF card has no GSM8K | strict-match: 0.7945 | fewshot: 3 | Model: /models/Qwen/Qwen3-Next-80B-A3B-Thinking"
+          },
+          {
+            "name": "ATOM::gpt-oss-120b accuracy (GSM8K)",
+            "value": 0.4253,
+            "unit": "score",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23713292554 | Threshold: 0.38 | BaselineModel: openai/gpt-oss-120b | BaselineNote: No public GSM8K baseline available | strict-match: 0.2335 | fewshot: 3 | Model: openai/gpt-oss-120b"
+          },
+          {
+            "name": "ATOM::gpt-oss-120b (2 GPUs) accuracy (GSM8K)",
+            "value": 0.4071,
+            "unit": "score",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23713292554 | Threshold: 0.38 | BaselineModel: openai/gpt-oss-120b | BaselineNote: No public GSM8K baseline available | strict-match: 0.2456 | fewshot: 3 | Model: openai/gpt-oss-120b"
           }
         ]
       }
