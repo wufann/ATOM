@@ -17,7 +17,7 @@ podman run --rm -it \
     --network host \
     --shm-size=16G \
     -v /shared/amdgpu/home/hattie_wu_qle:/home/hatwu \
-    -v /shared/data/models:/models \
+    -v /shared/data/amd_int/models:/models \
     "$IMAGE" \
     /bin/bash
 
