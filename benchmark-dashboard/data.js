@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1774848763295,
+  "lastUpdate": 1774848969194,
   "repoUrl": "https://github.com/ROCm/ATOM",
   "entries": {
     "Benchmark": [
@@ -218,7 +218,7 @@ window.BENCHMARK_DATA = {
             "email": "103567126+valarLip@users.noreply.github.com"
           },
           "id": "3f34dbbe0cb99a8bc2e683788a9a999597e7489c",
-          "message": "fix: benchmark job failures and Copilot review\n\nCritical fixes:\n- Remove backslash on $model_path in docker exec (all models got empty --model)\n- Fix GLM-5-FP8 HF path: amd/GLM-5-FP8 → zai-org/GLM-5-FP8\n\nCopilot review fixes:\n- Fix invalid CSS: hsl() backgroundColor → hsla()\n- Remove unnecessary # noqa: F811 on record_function import\n- Batch llvm-cxxfilt demangle calls (single subprocess)\n- Update stale prefill comment\n- Guard ZeroDivisionError in draft step overhead\n- Truncate prefill ctx label for large batches (>5 seqs)",
+          "message": "fix: benchmark job failures and Copilot review\n\nCritical fixes:\n- Remove backslash on $model_path in docker exec (all models got empty --model)\n- Fix GLM-5-FP8 HF path: amd/GLM-5-FP8 \u2192 zai-org/GLM-5-FP8\n\nCopilot review fixes:\n- Fix invalid CSS: hsl() backgroundColor \u2192 hsla()\n- Remove unnecessary # noqa: F811 on record_function import\n- Batch llvm-cxxfilt demangle calls (single subprocess)\n- Update stale prefill comment\n- Guard ZeroDivisionError in draft step overhead\n- Truncate prefill ctx label for large batches (>5 seqs)",
           "timestamp": "2026-03-14T15:04:33Z",
           "url": "https://github.com/ROCm/ATOM/commit/3f34dbbe0cb99a8bc2e683788a9a999597e7489c"
         },
@@ -472,7 +472,7 @@ window.BENCHMARK_DATA = {
             "email": "noreply@github.com"
           },
           "id": "24c76973ae282c1fc30f5f971bc058c9bee22a31",
-          "message": "docs: update README, add DeepSeek/GPT-OSS recipes, fix stale branch refs (#328)\n\n* docs: update README, add DeepSeek/GPT-OSS recipes, fix stale branch refs\n\nREADME:\n- Add CI/Benchmark/Dashboard badges\n- Add Qwen3-Next to model table\n- Add MTP serving example\n- Add live benchmark dashboard section with feature list\n- Add profiler manual curl API usage\n- Add Env Vars to docs table\n- Add DeepSeek-R1, GPT-OSS, Qwen3-Next recipes and framework integration links\n\nNew recipes:\n- DeepSeek-R1: BF16/MXFP4/MTP3 configs, performance baselines, accuracy\n- GPT-OSS: single GPU and DP+EP configs\n\nRecipe fixes:\n- GLM-5: zlr/glm5 branch → main\n- Kimi-K2: guanbao/kimi_k2_fp4 branch → main\n- Qwen3-235b: specific commit refs → main\n- SGLang: update PR status, remove TODO\n- All: git checkout specific_branch_or_commit → main\n\nHousekeeping:\n- .gitignore: exclude .claude/plan/\n- Remove accidentally committed plan file\n\n* fix: docs deploy to /docs/ subdir, restore benchmark-dashboard on gh-pages",
+          "message": "docs: update README, add DeepSeek/GPT-OSS recipes, fix stale branch refs (#328)\n\n* docs: update README, add DeepSeek/GPT-OSS recipes, fix stale branch refs\n\nREADME:\n- Add CI/Benchmark/Dashboard badges\n- Add Qwen3-Next to model table\n- Add MTP serving example\n- Add live benchmark dashboard section with feature list\n- Add profiler manual curl API usage\n- Add Env Vars to docs table\n- Add DeepSeek-R1, GPT-OSS, Qwen3-Next recipes and framework integration links\n\nNew recipes:\n- DeepSeek-R1: BF16/MXFP4/MTP3 configs, performance baselines, accuracy\n- GPT-OSS: single GPU and DP+EP configs\n\nRecipe fixes:\n- GLM-5: zlr/glm5 branch \u2192 main\n- Kimi-K2: guanbao/kimi_k2_fp4 branch \u2192 main\n- Qwen3-235b: specific commit refs \u2192 main\n- SGLang: update PR status, remove TODO\n- All: git checkout specific_branch_or_commit \u2192 main\n\nHousekeeping:\n- .gitignore: exclude .claude/plan/\n- Remove accidentally committed plan file\n\n* fix: docs deploy to /docs/ subdir, restore benchmark-dashboard on gh-pages",
           "timestamp": "2026-03-14T17:26:07Z",
           "url": "https://github.com/ROCm/ATOM/commit/24c76973ae282c1fc30f5f971bc058c9bee22a31"
         },
@@ -2974,7 +2974,7 @@ window.BENCHMARK_DATA = {
             "email": "noreply@github.com"
           },
           "id": "24c76973ae282c1fc30f5f971bc058c9bee22a31",
-          "message": "docs: update README, add DeepSeek/GPT-OSS recipes, fix stale branch refs (#328)\n\n* docs: update README, add DeepSeek/GPT-OSS recipes, fix stale branch refs\n\nREADME:\n- Add CI/Benchmark/Dashboard badges\n- Add Qwen3-Next to model table\n- Add MTP serving example\n- Add live benchmark dashboard section with feature list\n- Add profiler manual curl API usage\n- Add Env Vars to docs table\n- Add DeepSeek-R1, GPT-OSS, Qwen3-Next recipes and framework integration links\n\nNew recipes:\n- DeepSeek-R1: BF16/MXFP4/MTP3 configs, performance baselines, accuracy\n- GPT-OSS: single GPU and DP+EP configs\n\nRecipe fixes:\n- GLM-5: zlr/glm5 branch → main\n- Kimi-K2: guanbao/kimi_k2_fp4 branch → main\n- Qwen3-235b: specific commit refs → main\n- SGLang: update PR status, remove TODO\n- All: git checkout specific_branch_or_commit → main\n\nHousekeeping:\n- .gitignore: exclude .claude/plan/\n- Remove accidentally committed plan file\n\n* fix: docs deploy to /docs/ subdir, restore benchmark-dashboard on gh-pages",
+          "message": "docs: update README, add DeepSeek/GPT-OSS recipes, fix stale branch refs (#328)\n\n* docs: update README, add DeepSeek/GPT-OSS recipes, fix stale branch refs\n\nREADME:\n- Add CI/Benchmark/Dashboard badges\n- Add Qwen3-Next to model table\n- Add MTP serving example\n- Add live benchmark dashboard section with feature list\n- Add profiler manual curl API usage\n- Add Env Vars to docs table\n- Add DeepSeek-R1, GPT-OSS, Qwen3-Next recipes and framework integration links\n\nNew recipes:\n- DeepSeek-R1: BF16/MXFP4/MTP3 configs, performance baselines, accuracy\n- GPT-OSS: single GPU and DP+EP configs\n\nRecipe fixes:\n- GLM-5: zlr/glm5 branch \u2192 main\n- Kimi-K2: guanbao/kimi_k2_fp4 branch \u2192 main\n- Qwen3-235b: specific commit refs \u2192 main\n- SGLang: update PR status, remove TODO\n- All: git checkout specific_branch_or_commit \u2192 main\n\nHousekeeping:\n- .gitignore: exclude .claude/plan/\n- Remove accidentally committed plan file\n\n* fix: docs deploy to /docs/ subdir, restore benchmark-dashboard on gh-pages",
           "timestamp": "2026-03-14T17:26:07Z",
           "url": "https://github.com/ROCm/ATOM/commit/24c76973ae282c1fc30f5f971bc058c9bee22a31"
         },
@@ -44315,7 +44315,7 @@ window.BENCHMARK_DATA = {
           },
           "distinct": true,
           "id": "6f321f7dd6f7b484706760700effecead2a5d6bd",
-          "message": "fix: skip FP8 quantization for Indexer.weights_proj (GLM-5 GEMM crash) (#439)\n\nGLM-5-FP8 (glm_moe_dsa) crashes during model loading with\n\"RuntimeError: This GEMM is not supported!\" because\nIndexer.weights_proj is incorrectly routed to FP8 blockscale GEMM.\n\nThe HF config's modules_to_not_convert lists \"indexers_proj\" but\nATOM's actual layer path is \"indexer.weights_proj\" — the names don't\nmatch, so the exclude check fails silently.\n\nFix: set quant_config=None for weights_proj to use BF16 GEMM.\n\nAlso:\n- Fix dashboard accuracy tab date display (was multiplying\n  millisecond timestamps by 1000)\n- Cache is_rocm_aiter_fusion_shared_expert_enabled() result in local\n  var fuse_shared_experts to avoid repeated calls in hot-path topK\n  and MoE init functions",
+          "message": "fix: skip FP8 quantization for Indexer.weights_proj (GLM-5 GEMM crash) (#439)\n\nGLM-5-FP8 (glm_moe_dsa) crashes during model loading with\n\"RuntimeError: This GEMM is not supported!\" because\nIndexer.weights_proj is incorrectly routed to FP8 blockscale GEMM.\n\nThe HF config's modules_to_not_convert lists \"indexers_proj\" but\nATOM's actual layer path is \"indexer.weights_proj\" \u2014 the names don't\nmatch, so the exclude check fails silently.\n\nFix: set quant_config=None for weights_proj to use BF16 GEMM.\n\nAlso:\n- Fix dashboard accuracy tab date display (was multiplying\n  millisecond timestamps by 1000)\n- Cache is_rocm_aiter_fusion_shared_expert_enabled() result in local\n  var fuse_shared_experts to avoid repeated calls in hot-path topK\n  and MoE init functions",
           "timestamp": "2026-03-29T02:34:45+08:00",
           "tree_id": "88f3bb62b090936eb62dcc5f8d080df796ee3d48",
           "url": "https://github.com/ROCm/ATOM/commit/6f321f7dd6f7b484706760700effecead2a5d6bd"
@@ -44398,7 +44398,7 @@ window.BENCHMARK_DATA = {
             "email": "noreply@github.com"
           },
           "id": "6f321f7dd6f7b484706760700effecead2a5d6bd",
-          "message": "fix: skip FP8 quantization for Indexer.weights_proj (GLM-5 GEMM crash) (#439)\n\nGLM-5-FP8 (glm_moe_dsa) crashes during model loading with\n\"RuntimeError: This GEMM is not supported!\" because\nIndexer.weights_proj is incorrectly routed to FP8 blockscale GEMM.\n\nThe HF config's modules_to_not_convert lists \"indexers_proj\" but\nATOM's actual layer path is \"indexer.weights_proj\" — the names don't\nmatch, so the exclude check fails silently.\n\nFix: set quant_config=None for weights_proj to use BF16 GEMM.\n\nAlso:\n- Fix dashboard accuracy tab date display (was multiplying\n  millisecond timestamps by 1000)\n- Cache is_rocm_aiter_fusion_shared_expert_enabled() result in local\n  var fuse_shared_experts to avoid repeated calls in hot-path topK\n  and MoE init functions",
+          "message": "fix: skip FP8 quantization for Indexer.weights_proj (GLM-5 GEMM crash) (#439)\n\nGLM-5-FP8 (glm_moe_dsa) crashes during model loading with\n\"RuntimeError: This GEMM is not supported!\" because\nIndexer.weights_proj is incorrectly routed to FP8 blockscale GEMM.\n\nThe HF config's modules_to_not_convert lists \"indexers_proj\" but\nATOM's actual layer path is \"indexer.weights_proj\" \u2014 the names don't\nmatch, so the exclude check fails silently.\n\nFix: set quant_config=None for weights_proj to use BF16 GEMM.\n\nAlso:\n- Fix dashboard accuracy tab date display (was multiplying\n  millisecond timestamps by 1000)\n- Cache is_rocm_aiter_fusion_shared_expert_enabled() result in local\n  var fuse_shared_experts to avoid repeated calls in hot-path topK\n  and MoE init functions",
           "timestamp": "2026-03-28T18:34:45Z",
           "url": "https://github.com/ROCm/ATOM/commit/6f321f7dd6f7b484706760700effecead2a5d6bd"
         },
@@ -47784,7 +47784,7 @@ window.BENCHMARK_DATA = {
             "email": "noreply@github.com"
           },
           "id": "6f321f7dd6f7b484706760700effecead2a5d6bd",
-          "message": "fix: skip FP8 quantization for Indexer.weights_proj (GLM-5 GEMM crash) (#439)\n\nGLM-5-FP8 (glm_moe_dsa) crashes during model loading with\n\"RuntimeError: This GEMM is not supported!\" because\nIndexer.weights_proj is incorrectly routed to FP8 blockscale GEMM.\n\nThe HF config's modules_to_not_convert lists \"indexers_proj\" but\nATOM's actual layer path is \"indexer.weights_proj\" — the names don't\nmatch, so the exclude check fails silently.\n\nFix: set quant_config=None for weights_proj to use BF16 GEMM.\n\nAlso:\n- Fix dashboard accuracy tab date display (was multiplying\n  millisecond timestamps by 1000)\n- Cache is_rocm_aiter_fusion_shared_expert_enabled() result in local\n  var fuse_shared_experts to avoid repeated calls in hot-path topK\n  and MoE init functions",
+          "message": "fix: skip FP8 quantization for Indexer.weights_proj (GLM-5 GEMM crash) (#439)\n\nGLM-5-FP8 (glm_moe_dsa) crashes during model loading with\n\"RuntimeError: This GEMM is not supported!\" because\nIndexer.weights_proj is incorrectly routed to FP8 blockscale GEMM.\n\nThe HF config's modules_to_not_convert lists \"indexers_proj\" but\nATOM's actual layer path is \"indexer.weights_proj\" \u2014 the names don't\nmatch, so the exclude check fails silently.\n\nFix: set quant_config=None for weights_proj to use BF16 GEMM.\n\nAlso:\n- Fix dashboard accuracy tab date display (was multiplying\n  millisecond timestamps by 1000)\n- Cache is_rocm_aiter_fusion_shared_expert_enabled() result in local\n  var fuse_shared_experts to avoid repeated calls in hot-path topK\n  and MoE init functions",
           "timestamp": "2026-03-28T18:34:45Z",
           "url": "https://github.com/ROCm/ATOM/commit/6f321f7dd6f7b484706760700effecead2a5d6bd"
         },
@@ -52352,23 +52352,23 @@ window.BENCHMARK_DATA = {
       {
         "commit": {
           "author": {
-            "email": "zejun.chen@amd.com",
             "name": "zejunchen-zejun",
-            "username": "zejunchen-zejun"
+            "username": "zejunchen-zejun",
+            "email": "zejun.chen@amd.com"
           },
           "committer": {
-            "email": "zejun.chen@amd.com",
             "name": "zejunchen-zejun",
-            "username": "zejunchen-zejun"
+            "username": "zejunchen-zejun",
+            "email": "zejun.chen@amd.com"
           },
           "distinct": true,
-          "id": "7284773dbe459b33ed2a80f79f6b79251459079a",
-          "message": "ci: add one-off OOT dashboard backfill workflow\n\nBackfill historical OOT benchmark results from run 23703564227 into gh-pages without rerunning benchmarks.\n\nMade-with: Cursor",
-          "timestamp": "2026-03-30T13:32:20+08:00",
-          "tree_id": "6f5213acb0e57be22f6d289a5486c5f51086d277",
-          "url": "https://github.com/ROCm/ATOM/commit/7284773dbe459b33ed2a80f79f6b79251459079a"
+          "id": "1839646c9e4615572ce1d6d58eca4e12a61cf021",
+          "message": "change the model weight path\n\nSigned-off-by: zejunchen-zejun <zejun.chen@amd.com>",
+          "timestamp": "2026-03-29T14:51:32+08:00",
+          "tree_id": "29b79ee2d237546b4f4e1239eb3c169ea5466cd9",
+          "url": "https://github.com/ROCm/ATOM/commit/1839646c9e4615572ce1d6d58eca4e12a61cf021"
         },
-        "date": 1774848762109,
+        "date": 1774767120000,
         "tool": "customBiggerIsBetter",
         "benches": [
           {
