@@ -222,10 +222,10 @@ Pull the latest OOT image:
 docker pull rocm/atom-dev:vllm-latest
 ```
 
-If you need an OOT docker image for a specific vLLM version or a specific release date, browse the available tags on [Docker Hub](https://hub.docker.com/r/rocm/atom-dev/tags) and pull the exact tag you need there. For example, to pull the OOT docker adapted to vLLM `0.17.0` on `2026-03-15`:
+If you need an OOT docker image for a specific vLLM version or a specific release date, browse the available tags on [Docker Hub](https://hub.docker.com/r/rocm/atom-dev/tags) and pull the exact tag you need there. For example, to pull the OOT docker adapted to vLLM `0.18.0` on `2026-03-29`:
 
 ```bash
-docker pull rocm/atom-dev:vllm-v0.17.0-nightly_20260315
+docker pull rocm/atom-dev:vllm-v0.18.0-nightly_20260329
 ```
 
 ### 5.3 Launch vLLM with ATOM Plugin

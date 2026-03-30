@@ -9,7 +9,7 @@ FROM ${OOT_BASE_IMAGE} AS atom_oot
 ARG MAX_JOBS
 ARG VENV_PYTHON="/opt/venv/bin/python"
 ARG VLLM_REPO="https://github.com/vllm-project/vllm.git"
-ARG VLLM_COMMIT="b31e9326a7d9394aab8c767f8ebe225c65594b60"
+ARG VLLM_COMMIT="bcf2be96120005e9aea171927f85055a6a5c0cf6"
 ARG INSTALL_LM_EVAL=1
 ARG INSTALL_FASTSAFETENSORS=1
 ARG ROCM_WHEEL_INDEX="https://repo.radeon.com/rocm/manylinux/rocm-rel-7.2.1/"

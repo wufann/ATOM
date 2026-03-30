@@ -52,10 +52,10 @@ on:
         default: ""
       vllm_commit:
         description: "vLLM commit for OOT image"
-        default: "b31e9326a7d9394aab8c767f8ebe225c65594b60"
+        default: "bcf2be96120005e9aea171927f85055a6a5c0cf6"
       vllm_version:
         description: "vLLM version label for OOT image tags"
-        default: "0.17.0"
+        default: "0.18.0"
 
 jobs:
   docker-release:
@@ -75,8 +75,8 @@ jobs:
       RCCL_REPO: "https://github.com/ROCm/rccl.git"
       RCCL_BRANCH: "29e1567b95e28823b0beb1a988adc587bfab5b4f"
       GPU_ARCH: "gfx942;gfx950"
-      VLLM_COMMIT: "b31e9326a7d9394aab8c767f8ebe225c65594b60"
-      VLLM_VERSION: "0.17.0"
+      VLLM_COMMIT: "bcf2be96120005e9aea171927f85055a6a5c0cf6"
+      VLLM_VERSION: "0.18.0"
 
     steps:
       - name: Set HF_TOKEN
