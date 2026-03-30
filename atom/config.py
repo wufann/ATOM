@@ -422,7 +422,14 @@ class QuantizationConfig:
                     "gate_proj": ("gate_up_proj", 0),
                     "up_proj": ("gate_up_proj", 1),
                 }
-        elif model_type == "qwen3_moe" or model_type == "qwen3_next":
+        elif model_type in (
+            "qwen3_moe",
+            "qwen3_next",
+            "qwen3_5",
+            "qwen3_5_text",
+            "qwen3_5_moe",
+            "qwen3_5_moe_text",
+        ):
             if getattr(hf_config, "mlp_only_layers", []):
                 self.packed_modules_mapping["gate_up_proj"] = ["gate_proj", "up_proj"]
 
