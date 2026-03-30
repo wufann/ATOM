@@ -579,8 +579,12 @@ class PagedAttentionImplPluginModeMethods:
         # as vLLM cuda graph capture padding mechanism, here split the qkvo with
         # the actual tokens
         query = query[:num_actual_tokens]
-        qkv = qkv[:num_actual_tokens]
-        position = position[:num_actual_tokens]
+        # qkv is only populated when ATOM_ENABLE_QK_NORM_ROPE_CACHE_QUANT_FUSION
+        # repacks Q/K/V into value; otherwise it stays None and rope_cache uses q,k,v.
+        if qkv is not None:
+            qkv = qkv[:num_actual_tokens]
+        if position is not None:
+            position = position[:num_actual_tokens]
         if key is not None:
             key = key[:num_actual_tokens]
         if value is not None:
