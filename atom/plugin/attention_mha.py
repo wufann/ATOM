@@ -10,6 +10,7 @@ import torch
 import aiter
 from aiter import dtypes, fused_qk_norm_rope_cache_quant_shuffle
 from aiter.ops.triton.fused_kv_cache import fused_qk_rope_reshape_and_cache
+import os as _os; _ENABLE_CK = int(_os.environ.get("ENABLE_CK", "1"))
 from aiter.ops.triton.gluon.pa_decode_gluon import get_recommended_splits
 from typing import TYPE_CHECKING, Optional
 from atom.utils import envs
@@ -135,8 +136,7 @@ class PagedAttentionImplPluginModeMethods:
             )
         elif use_triton_attn and self.rotary_emb is not None:
 
-            k_scale = v_scale = self.per_tensor_scale
-            self.per_token_quant = False
+            k_scale = v_scale = self.one_scale
             qkv = qkv.view(qkv.shape[0], -1, self.head_dim)
             q, k, v = qkv.split(
                 [self.num_heads, self.num_kv_heads, self.num_kv_heads], dim=1
@@ -349,9 +349,8 @@ class PagedAttentionImplPluginModeMethods:
             token_to_batch=swa_token_to_batch,
             seq_starts=swa_seq_starts,
             dequant=self.kv_cache_dtype.startswith("fp8"),
-            kv_cache_layout="SHUFFLE",
+            kv_cache_layout="NHD",
             total_tokens=swa_total_tokens,
-            per_token_quant=self.per_token_quant,
         )
 
         sliding_window = (
@@ -457,7 +456,6 @@ class PagedAttentionImplPluginModeMethods:
                 dequant=self.kv_cache_dtype.startswith("fp8"),
                 kv_cache_layout="SHUFFLE",
                 total_tokens=total_token_per_batch[chunk_idx],
-                per_token_quant=self.per_token_quant,
             )
 
             suf_out, suf_lse = aiter.flash_attn_varlen_func(
@@ -560,8 +558,6 @@ class PagedAttentionImplPluginModeMethods:
         # usually it is created when cuda graph capture for decode phase
         if self.kv_cache_dtype == "fp8":
             if self.k_scale is None or self.v_scale is None:
-                # origin kv_scale is per tensor scale of value one.
-                self.per_tensor_scale = self.kv_scale
                 self.kv_scale = torch.zeros(
                     2,
                     num_blocks,
@@ -573,6 +569,7 @@ class PagedAttentionImplPluginModeMethods:
             # update the layer kv scale tensor
             self.k_scale = self.kv_scale[0]
             self.v_scale = self.kv_scale[1]
+            self.one_scale = torch.ones((1,), dtype=torch.float32, device=self.device)
             layer.k_scale = self.k_scale
             layer.v_scale = self.v_scale
 
@@ -645,20 +642,6 @@ class PagedAttentionImplPluginModeMethods:
 
         # calculate for extends
         if num_extends > 0:
-            num_blocks, block_size, num_kv_heads, head_size = k_cache.shape
-            x = 16 // k_cache.element_size()
-            k_cache_template = torch.empty(
-                [num_blocks, num_kv_heads, head_size // x, block_size, x],
-                dtype=k_cache.dtype,
-                device="meta",
-            )
-            v_cache_template = torch.empty(
-                [num_blocks, num_kv_heads, block_size // x, head_size, x],
-                dtype=v_cache.dtype,
-                device="meta",
-            )
-            new_key_cache = k_cache.view_as(k_cache_template)
-            new_value_cache = v_cache.view_as(v_cache_template)
             assert attn_metadata.plugin_metadata.extend_metadata is not None
             extend_tokens_slice = slice(
                 num_decode_tokens, num_decode_tokens + num_extend_tokens
@@ -678,8 +661,8 @@ class PagedAttentionImplPluginModeMethods:
                 query=extend_querys,
                 key=extend_keys,
                 value=extend_values,
-                key_cache=new_key_cache,
-                value_cache=new_value_cache,
+                key_cache=k_cache,
+                value_cache=v_cache,
                 output=extend_outputs,
                 cu_seqlens_q=attn_metadata.plugin_metadata.extend_metadata.query_start_loc,
                 max_seqlen_q=attn_metadata.plugin_metadata.extend_metadata.max_query_len,

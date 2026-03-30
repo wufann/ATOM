@@ -8,21 +8,21 @@ import torch
 from aiter import fused_qk_norm_rope_cache_quant_shuffle
 from aiter.ops.triton.fused_kv_cache import fused_qk_rope_reshape_and_cache
 from aiter.ops.triton.gluon.pa_decode_gluon import get_recommended_splits
-from aiter.ops.triton.unified_attention import unified_attention
+import os as _os
+if int(_os.environ.get('ENABLE_CK', '1')) == 0:
+    from atom.model_ops.vllm_triton_unified_attention import unified_attention
+else:
+    from aiter.ops.triton.unified_attention import unified_attention
+import os as _os; ENABLE_CK = int(_os.environ.get("ENABLE_CK", "1"))
 from atom.config import get_current_atom_config
 from atom.utils.forward_context import ForwardContext, get_forward_context
 from torch import nn
 
 from .attention_mla import MLAModules
 
-import logging
-
 from atom.plugin.prepare import is_plugin_mode, is_vllm
 from atom.plugin.attention_mha import PagedAttentionImplDecoratorForPluginMode
 from atom.utils.decorators import mark_trace
-from atom.model_ops.base_attention import cp_mha_gather_cache
-
-logger = logging.getLogger("atom")
 
 
 @PagedAttentionImplDecoratorForPluginMode
@@ -71,7 +71,6 @@ class PagedAttentionImpl(nn.Module):
             else 1.0
         )
         self.kv_scale = torch.tensor(self.kv_scale_float, dtype=torch.float32)
-        self.per_token_quant = True
         self.sinks = sinks
         self.sliding_window = sliding_window if sliding_window is not None else -1
         self.rotary_emb = rotary_emb
@@ -135,14 +134,6 @@ class PagedAttentionImpl(nn.Module):
             and self.q_norm is not None
             and self.k_norm is not None
         ):
-            # fused_qk_norm_rope_cache_quant_shuffle expects V cache layout
-            # [num_blocks, num_kv_heads, block_size//x, head_size, x], not [n, nh, hd, bs]
-            x = 16 // k_cache.element_size()
-            if k_cache.dim() == 5 and v_cache.dim() == 4:
-                n, nh, hd, bs = v_cache.shape
-                v_cache_shuffle = v_cache.view(n, nh, bs // x, hd, x)
-            else:
-                v_cache_shuffle = v_cache
             fused_qk_norm_rope_cache_quant_shuffle(
                 qkv,
                 num_heads_q=self.num_heads,
@@ -156,7 +147,7 @@ class PagedAttentionImpl(nn.Module):
                 is_neox_style=self.rotary_emb.is_neox_style,
                 pos_ids=position,
                 k_cache=k_cache,
-                v_cache=v_cache_shuffle,
+                v_cache=v_cache,
                 slot_mapping=attn_metadata.slot_mapping,
                 kv_cache_dtype=(
                     "auto" if self.kv_cache_dtype == "bf16" else self.kv_cache_dtype
@@ -170,7 +161,6 @@ class PagedAttentionImpl(nn.Module):
                 [self.num_heads, self.num_kv_heads, self.num_kv_heads], dim=1
             )
         elif use_triton_attn and self.rotary_emb is not None:
-            self.per_token_quant = False
             k_scale = v_scale = self.kv_scale
 
             q, k, k_cache, v_cache = fused_qk_rope_reshape_and_cache(
@@ -187,6 +177,7 @@ class PagedAttentionImpl(nn.Module):
                 v_scale,
                 self.rotary_emb.is_neox_style,
                 flash_layout=False,
+            # DEBUG: log flash_layout
                 apply_scale=self.kv_cache_dtype.startswith("fp8"),
                 offs=None,
                 q_out=q,
@@ -229,96 +220,7 @@ class PagedAttentionImpl(nn.Module):
                     asm_layout=asm_layout,
                 )
 
-        # Prefix cache hit: gather cached KV from paged cache and concat with new tokens
-        if attn_metadata.has_cached:
-            q, k, v, k_cache, v_cache, k_scale, v_scale = (
-                self._gather_prefix_and_concat_kv(
-                    q, k, v, k_cache, v_cache, k_scale, v_scale, attn_metadata
-                )
-            )
-
         return q, k, v, k_cache, v_cache, k_scale, v_scale
-
-    def _gather_prefix_and_concat_kv(
-        self,
-        q: torch.Tensor,
-        k: torch.Tensor,
-        v: torch.Tensor,
-        k_cache: torch.Tensor,
-        v_cache: torch.Tensor,
-        k_scale: torch.Tensor,
-        v_scale: torch.Tensor,
-        attn_metadata,
-    ):
-        """
-        When prefix cache hits, gather full KV (cached + new) from paged cache in
-        one pass. New tokens are already written by fused_qk_rope_reshape_and_cache.
-        Same flow as gather_kv_b_proj: write new first, then read cached+new together.
-        """
-        cu_seqlens_k = attn_metadata.cu_seqlens_k
-        total_tokens = attn_metadata.total_kv
-        bs = attn_metadata.context_lens.shape[0]
-        token_to_batch = torch.repeat_interleave(
-            torch.arange(
-                bs, dtype=torch.int32, device=attn_metadata.context_lens.device
-            ),
-            attn_metadata.context_lens.long(),
-        )
-
-        num_kv_heads = k.shape[1]
-        head_dim = k.shape[2]
-
-        k_full = torch.empty(
-            (total_tokens, num_kv_heads, head_dim), dtype=k.dtype, device=k.device
-        )
-        v_full = torch.empty(
-            (total_tokens, num_kv_heads, head_dim), dtype=k.dtype, device=k.device
-        )
-
-        # Convert cache for cp_mha_gather_cache
-        # fused_qk_norm_rope_cache_quant_shuffle: K [n, nh, hd//x, bs, x], V [n, nh, bs//x, hd, x] (SHUFFLE)
-        # fused_qk_rope_reshape_and_cache: K [n, nh, hd//x, bs, x], V [n, nh, hd, bs] -> NHD
-        if k_cache.dim() == 5:
-            x = 16 // k_cache.element_size()
-            n, nh, _, block_size, _ = k_cache.shape
-            if v_cache.dim() == 4:
-                # fused_qk_norm_rope_cache_quant_shuffle: V data in [n, nh, bs//x, hd, x] layout
-                use_shuffle = True
-                k_cache_gather = k_cache
-                v_cache_gather = v_cache.view(n, nh, block_size // x, head_dim, x)
-            else:
-                # fused_qk_rope_reshape_and_cache: V [n, nh, hd, bs] -> NHD
-                use_shuffle = False
-                k_cache_gather = (
-                    k_cache.permute(0, 3, 1, 2, 4)
-                    .contiguous()
-                    .view(n, block_size, nh, head_dim)
-                )
-                v_cache_gather = v_cache.permute(0, 3, 1, 2).contiguous()
-        else:
-            use_shuffle = False
-            k_cache_gather = k_cache
-            v_cache_gather = v_cache
-            block_size = k_cache.shape[1]
-
-        block_tables = attn_metadata.block_tables
-        cp_mha_gather_cache(
-            key_cache=k_cache_gather,
-            value_cache=v_cache_gather,
-            key=k_full,
-            value=v_full,
-            block_tables=block_tables,
-            k_scales=k_scale,
-            v_scales=v_scale,
-            cu_seqlens_kv=cu_seqlens_k,
-            token_to_batch=token_to_batch,
-            seq_starts=attn_metadata.seq_starts,
-            dequant=self.kv_cache_dtype.startswith("fp8"),
-            kv_cache_layout="SHUFFLE" if use_shuffle else "NHD",
-            total_tokens=total_tokens,
-        )
-
-        return q, k_full, v_full, k_cache, v_cache, k_scale, v_scale
 
     @mark_trace(prefix="paged_attention_triton", torch_compile=False)
     def paged_attention_triton(
@@ -500,6 +402,67 @@ class PagedAttentionImpl(nn.Module):
         attn_metadata = fwd_ctx.attn_metadata
         block_tables = attn_metadata.block_tables
 
+        if block_tables is None:
+            # No paged KV cache block_table during prefill -- treat each
+            # token as its own block (block_size=1) and build a fake
+            # block_table so we can go through unified_attention.
+            num_seqs = attn_metadata.cu_seqlens_q.shape[0] - 1
+            seq_lens = attn_metadata.cu_seqlens_q[1:] - attn_metadata.cu_seqlens_q[:-1]
+            max_seq_len = int(attn_metadata.max_seqlen_q)
+            arange = torch.arange(max_seq_len, device=q.device, dtype=torch.int32)
+            starts = attn_metadata.cu_seqlens_q[:num_seqs].unsqueeze(1)
+            block_tables = starts + arange.unsqueeze(0)
+            k_cache_fake = k.unsqueeze(1)
+            v_cache_fake = v.unsqueeze(1)
+            o = torch.empty_like(q)
+            descale_shape = (num_seqs, k.shape[1])
+            sliding_window = (
+                (self.sliding_window - 1, 0)
+                if self.sliding_window is not None
+                else (-1, -1)
+            )
+            unified_attention(
+                q, k_cache_fake, v_cache_fake, o,
+                cu_seqlens_q=attn_metadata.cu_seqlens_q,
+                seqused_k=seq_lens,
+                max_seqlen_q=max_seq_len,
+                max_seqlen_k=max_seq_len,
+                softmax_scale=self.scale,
+                causal=True,
+                alibi_slopes=None,
+                window_size=sliding_window,
+                block_table=block_tables,
+                softcap=0,
+                q_descale=None,
+                k_descale=self.kv_scale.expand(descale_shape),
+                v_descale=self.kv_scale.expand(descale_shape),
+                sinks=self.sinks,
+            )
+            return o
+
+        # Convert KV cache from non-flash to flash layout for unified_attention
+        import logging as _lg; _lg.getLogger("atom").info(f"[DEBUG] k_cache.shape={k_cache.shape}, v_cache.shape={v_cache.shape}")
+        # non-flash k_cache: [num_blocks, num_kv_heads, head_size, block_size, 1] or similar
+        # flash layout: [num_blocks, block_size, num_kv_heads, head_size]
+        # gfx1250: convert non-flash KV cache to flash layout for unified_attention
+        if ENABLE_CK == 0:
+            if k_cache.ndim == 5:
+                nb, nkv, hds, bs, vs = k_cache.shape
+                # gfx1250 fix: permute before reshape to avoid merging non-adjacent dims
+                _k = k_cache.permute(0, 3, 1, 2, 4).reshape(nb, bs, nkv, hds * vs).contiguous()
+            else:
+                _k = k_cache.permute(0, 3, 1, 2).contiguous() if k_cache.ndim == 4 else k_cache
+            if v_cache.ndim == 5:
+                vnb, vnkv, vhds, vbs, vvs = v_cache.shape
+                _v = v_cache.permute(0, 3, 1, 2, 4).reshape(vnb, vbs, vnkv, vhds * vvs).contiguous()
+            elif v_cache.ndim == 4:
+                _v = v_cache.permute(0, 3, 1, 2).contiguous()
+            else:
+                _v = v_cache
+        else:
+            _k = k_cache
+            _v = v_cache
+
         o = torch.empty_like(q)
         descale_shape = (attn_metadata.cu_seqlens_q.shape[0] - 1, k.shape[1])
         sliding_window = (
@@ -509,8 +472,8 @@ class PagedAttentionImpl(nn.Module):
         )
         unified_attention(
             q,
-            k_cache,
-            v_cache,
+            _k,
+            _v,
             o,
             cu_seqlens_q=attn_metadata.cu_seqlens_q,
             seqused_k=attn_metadata.context_lens,
@@ -535,9 +498,14 @@ class PagedAttentionImpl(nn.Module):
         ctx = fwd_ctx.context
 
         if ctx.is_prefill:
+            if not ENABLE_CK and self.use_triton_attn:
+                return self.prefill_attention_triton
             return self.prefill_attention
         else:
             if self.use_triton_attn:
+                # gfx1250: pa_decode_gluon doesn't support gfx1250, use unified_attention
+                if not ENABLE_CK:
+                    return self.prefill_attention_triton
                 return self.paged_attention_triton
             else:
                 # Only use pa persistent when block_size == 1024
