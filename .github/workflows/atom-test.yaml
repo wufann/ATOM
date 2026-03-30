@@ -243,10 +243,16 @@ jobs:
 
           if [ -d "/models" ]; then
             MODEL_MOUNT="-v /models:/models"
+            MODEL_ROOT_DIR="/models"
+          elif [ -d "/mnt/dcgpuval/models" ]; then
+            MODEL_MOUNT="-v /mnt/dcgpuval/models:/mnt/dcgpuval/models"
+            MODEL_ROOT_DIR="/mnt/dcgpuval/models"
           else
-            echo "Warning: /models directory not found on runner; skipping /models mount and disabling model pre-download optimization."
+            echo "Warning: neither /models nor /mnt/dcgpuval/models exists on runner. Skipping model mount and model pre-download optimization."
             MODEL_MOUNT=""
+            MODEL_ROOT_DIR=""
           fi
+          echo "Selected model root directory: ${MODEL_ROOT_DIR:-<none>}"
 
           # Write env_vars via env block (avoids expression injection)
           printenv MODEL_ENV_VARS | grep -v '^$' > /tmp/env_file.txt || true
@@ -331,13 +337,21 @@ jobs:
       - name: Download models
         run: |
           if [ -d "/models" ]; then
-            echo "/models directory found, downloading model to /models/${{ matrix.model_path }}"
-            if ! docker exec -e HF_TOKEN=${{ secrets.AMD_HF_TOKEN }} "$CONTAINER_NAME" bash -lc "hf download ${{ matrix.model_path }} --local-dir /models/${{ matrix.model_path }}"; then
+            MODEL_ROOT_DIR="/models"
+          elif [ -d "/mnt/dcgpuval/models" ]; then
+            MODEL_ROOT_DIR="/mnt/dcgpuval/models"
+          else
+            MODEL_ROOT_DIR=""
+          fi
+
+          if [ -n "$MODEL_ROOT_DIR" ]; then
+            echo "Model cache directory found at ${MODEL_ROOT_DIR}, downloading model to ${MODEL_ROOT_DIR}/${{ matrix.model_path }}"
+            if ! docker exec -e HF_TOKEN=${{ secrets.AMD_HF_TOKEN }} "$CONTAINER_NAME" bash -lc "hf download ${{ matrix.model_path }} --local-dir ${MODEL_ROOT_DIR}/${{ matrix.model_path }}"; then
               echo "Model download failed for '${{ matrix.model_path }}'. Aborting."
               exit 1
             fi
           else
-            echo "/models directory not found, skipping model download"
+            echo "No model cache directory found (/models or /mnt/dcgpuval/models), skipping model download"
           fi
 
       - name: Run ATOM simple inference
@@ -353,6 +367,8 @@ jobs:
 
           if [ -d "/models" ]; then
             model_path="/models/${{ matrix.model_path }}"
+          elif [ -d "/mnt/dcgpuval/models" ]; then
+            model_path="/mnt/dcgpuval/models/${{ matrix.model_path }}"
           else
             model_path="${{ matrix.model_path }}"
           fi
@@ -401,6 +417,8 @@ jobs:
           echo "========== Launching ATOM server =========="
           if [ -d "/models" ]; then
             model_path="/models/${{ matrix.model_path }}"
+          elif [ -d "/mnt/dcgpuval/models" ]; then
+            model_path="/mnt/dcgpuval/models/${{ matrix.model_path }}"
           else
             model_path="${{ matrix.model_path }}"
           fi
