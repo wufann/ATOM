@@ -229,6 +229,14 @@ jobs:
           name: aiter-whl
           path: /tmp/aiter-whl
 
+      - name: Debug model cache directories on runner
+        run: |
+          echo "Runner name: ${RUNNER_NAME:-unknown}"
+          echo "Hostname: $(hostname)"
+          echo "PWD: $(pwd)"
+          ls -ld /models /mnt /mnt/dcgpuval /mnt/dcgpuval/models || true
+          mount | grep -E 'dcgpuval| /models ' || true
+
       - name: Start CI container
         run: |
           echo "Clean up containers..."
