@@ -6,6 +6,7 @@ IMAGE="docker.io/rocm/vllm-private:preview_0.17.0_rocm7.2.1RC5_build78_20260306"
 # IMAGE="docker.io/rocm/pytorch-private:81_ubuntu24.04_py3.13_pytorch_release-2.9_rocprofiler"
 # IMAGE="docker.io/rocm/vllm-private:dsfp4_0215"
 # IMAGE="docker.io/rocm/atom-dev:vllm-latest"
+IMAGE="docker.io/vllm/vllm-openai-rocm:v0.18.0"
 if ! podman image exists "$IMAGE"; then
     podman pull --storage-opt ignore_chown_errors=true "$IMAGE"
 fi
@@ -13,7 +14,7 @@ fi
 podman run --rm -it \
     --device=/dev/kfd \
     --device=/dev/dri \
-    --group-add video \
+    --group-add keep-groups \
     --network host \
     --shm-size=16G \
     -v /shared/amdgpu/home/hattie_wu_qle:/home/hatwu \
