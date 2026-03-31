@@ -1,6 +1,6 @@
 # ATOM as vLLM Plugin Backend: Ecosystem Co-Evolution for AMD LLM Inference
 
-Authors:  Zejun Chen, Hattie Wu, Lingpeng Jin, Carlus Huang, Chuan Li, Peng Sun
+Authors:  Zejun Chen, Hattie Wu, Lingpeng Jin, Carlus Huang, Chuan Li, Peng Sun, Emad Barsoum
 
 ## 1. Introduction
 
