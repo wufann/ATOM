@@ -642,8 +642,8 @@ class Mxfp4MoEMethod(FusedMoEMethodBase):
             or self.quant_type == QuantType.per_1x32
         )
         gfx = get_gfx()
-        # When CK is disabled on gfx95, route MXFP4 MoE to the Triton path.
-        self.use_triton = gfx.startswith("gfx94") or (
+        # Route MXFP4 MoE to Triton on gfx94/gfx12, or on gfx95 when CK is unavailable.
+        self.use_triton = gfx.startswith("gfx94") or gfx.startswith("gfx12") or (
             gfx.startswith("gfx95") and (envs.ATOM_USE_TRITON_GEMM or not ENABLE_CK)
         )
         if self.use_triton:
