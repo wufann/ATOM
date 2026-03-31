@@ -89,19 +89,34 @@ The `ATOMModelBase` wrapper implements vLLM's model interface while delegating t
 
 ## 4. Supported Models
 
+The ATOM vLLM plugin backend **simultaneously supports both LLM and VLM** in one unified serving path. Specifically, it covers text-only LLM models and Qwen3.5-based conditional-generation VLM models (including both dense and MoE variants).
+
 | Architecture | Type | Representative Models | ATOM Model Class |
 |-------------|------|----------------------|-----------------|
-| Qwen3ForCausalLM | Dense | Qwen3-8B, Qwen3-32B | `atom.models.qwen3` |
-| Qwen3MoeForCausalLM | MoE | Qwen3-235B-A22B | `atom.models.qwen3_moe` |
-| DeepseekV3ForCausalLM | MoE (MLA) | DeepSeek-V3, DeepSeek-R1, Kimi-K2-Thinking | `atom.models.deepseek_v2` |
-| GptOssForCausalLM | MoE | GPT-OSS | `atom.models.gpt_oss` |
-| Glm4MoeForCausalLM | MoE | GLM-4-MoE | `atom.models.glm4_moe` |
+| Qwen3MoeForCausalLM | MoE | Qwen/Qwen3-235B-A22B-Instruct-2507-FP8 | `atom.models.qwen3_moe` |
+| DeepseekV3ForCausalLM | MoE (MLA) | deepseek-ai/DeepSeek-R1-0528 (FP8), amd/DeepSeek-R1-0528-MXFP4, amd/Kimi-K2-Thinking-MXFP4 | `atom.models.deepseek_v2` |
+| GptOssForCausalLM | MoE | openai/gpt-oss-120b | `atom.models.gpt_oss` |
+| Glm4MoeForCausalLM | MoE (MLA) | zai-org/GLM-4.7-FP8 | `atom.models.glm4_moe` |
+| Qwen3NextForCausalLM | Hybrid MoE | Qwen/Qwen3-Next-80B-A3B-Instruct-FP8 | `atom.models.qwen3_next` |
+| Qwen3_5ForConditionalGeneration | Dense (Text/VLM) | Qwen/Qwen3.5-35B-A3B-FP8 | `atom.models.qwen3_5` |
+| Qwen3_5MoeForConditionalGeneration | MoE (Text/VLM) | Qwen/Qwen3.5-397B-A17B-FP8 | `atom.models.qwen3_5` |
 
-For step-by-step deployment recipes (Docker setup, server launch, benchmarking, and accuracy validation) for each model, refer to the [ATOM vLLM Recipes](https://github.com/ROCm/ATOM/tree/main/recipes/atom_vllm).
+For step-by-step deployment recipes (Docker setup, server launch, benchmarking, and accuracy validation), refer to the [ATOM vLLM Recipes](https://github.com/ROCm/ATOM/tree/main/recipes/atom_vllm).
+For VLM usage details, see `recipes/atom_vllm/Qwen3.5.md` (including the multimodal input example).
 
 ## 5. Performance Characteristics
 
 In terms of performance, ATOM focuses on the following areas:
+
+To make performance and quality tracking transparent in production-like settings, ATOM also provides a live benchmark dashboard for the vLLM plugin backend.
+
+- **Dashboard URL:** [ATOM vLLM Benchmark Dashboard](https://rocm.github.io/ATOM/benchmark-dashboard/#backend=ATOM-vLLM)
+- **Throughput vs Latency:** Compare output throughput and latency metrics under different load settings to evaluate efficiency/quality tradeoffs.
+- **Trends:** Track performance changes over time, which helps identify regressions or improvements after kernel updates, model changes, or runtime upgrades.
+- **Accuracy:** Review benchmarked quality signals together with performance so optimization decisions can balance speed and model correctness.
+- **Data & Trace / Download JSON:** Export benchmark artifacts for offline analysis, reproducibility, and CI report integration.
+
+In practice, this dashboard is useful as a single pane of glass for release validation: after each ATOM or vLLM plugin update, teams can quickly confirm whether throughput, latency, and accuracy remain within expected ranges.
 
 1. **Kernel-Level Fusion** — ATOM's models leverage AITER kernels that perform aggressive fusion of operations (e.g., QK-norm + RoPE + cache update + quantization) into single kernel launches, reducing memory bandwidth pressure.
 
