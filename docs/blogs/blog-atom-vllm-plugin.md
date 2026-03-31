@@ -49,7 +49,6 @@ The following diagram illustrates the end-to-end execution flow—from `vllm ser
 
 ![vLLM execution flow with ATOM OOT plugin](atom_vllm_oot_injection.svg)
 
-The diagram below illustrates the end-to-end execution flow of vLLM with the ATOM plugin—from vllm serve startup, through out-of-the-box (OOT) plugin discovery, model construction, to a single inference serving step—detailing the interaction between vLLM and ATOM at every stage.
 The execution flow is divided into four core phases: **plugin discovery** (Steps 1–5), **attention backend selection** (Steps 6–7), **model construction** (Steps 8–9), and **inference serving** (Steps 10–11). The following subsections break down the key technical implementation details for each phase.
 
 ### 3.1. Entry Point Registration (Steps 1–5)
@@ -87,7 +86,7 @@ Two specialized attention backends are supported:
 
 ### 3.3. Model Construction and Weight Loading (Steps 8–9)
 
-The `ATOMModelBase` wrapper fully implements vLLM's model interface while delegating all core computations to ATOM's native models implementations. It handles three critical tasks:
+The `ATOMModelBase` wrapper fully implements vLLM's model interface while delegating all core computations to ATOM's native model implementations. It handles three critical tasks:
 
 - **Config translation** —  Seamlessly converts vLLM’s `VllmConfig` to ATOM’s native `Config`, preserving CUDAGraph settings while applying ATOM’s optimized compile policies for AMD GPUs.
 - **Model construction** — Instantiates the ATOM model class and initializes AITER’s distributed backend for multi-GPU/rack-scale inference.
