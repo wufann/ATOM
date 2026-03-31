@@ -15,10 +15,11 @@ set -euo pipefail
 #   accuracy - run gsm8k accuracy test and save result JSON
 #
 # MODE:
-#   ci    - only Kimi-K2
-#   full  - all OOT-supported models
+#   ci    - workflow-provided OOT CI model entry
+#   full  - workflow-provided OOT full-validation model entry
 #
-# Optional model_name can be used to run a single model in full mode.
+# Optional model_name can be used to run a single model when a caller passes
+# multiple explicit entries.
 
 TYPE=${1:-launch}
 MODE=${2:-ci}
@@ -49,23 +50,6 @@ EXPLICIT_MODEL_PATH=${OOT_MODEL_PATH:-}
 EXPLICIT_EXTRA_ARGS=${OOT_EXTRA_ARGS:-}
 LAST_VLLM_LOG_LINE=0
 
-# Default model format:
-#   MODEL_NAME|MODEL_PATH|EXTRA_ARGS
-# Default lists are kept for ad hoc/manual runs. CI workflows pass the exact
-# current matrix entry via OOT_MODEL_* env vars so model coverage does not drift
-# when the workflow matrix changes.
-CI_MODE_MODELS=(
-  "Kimi-K2-Thinking-MXFP4|amd/Kimi-K2-Thinking-MXFP4|--trust-remote-code --tensor-parallel-size 4"
-)
-
-FULL_MODE_MODELS=(
-  "Qwen3 MoE|Qwen/Qwen3-235B-A22B-Instruct-2507-FP8|--trust-remote-code --tensor-parallel-size 8 --enable-expert-parallel"
-  "DeepSeek-R1 FP8|deepseek-ai/DeepSeek-R1-0528|--trust-remote-code --tensor-parallel-size 8"
-  "DeepSeek-R1 MXFP4|amd/DeepSeek-R1-0528-MXFP4|--trust-remote-code --tensor-parallel-size 8"
-  "GPT-OSS|openai/gpt-oss-120b|--tensor-parallel-size 1"
-  "Kimi-K2|amd/Kimi-K2-Thinking-MXFP4|--trust-remote-code --tensor-parallel-size 8"
-)
-
 declare -a ACTIVE_MODELS=()
 if [[ -n "${EXPLICIT_MODEL_NAME}" || -n "${EXPLICIT_MODEL_PATH}" || -n "${EXPLICIT_EXTRA_ARGS}" ]]; then
   if [[ -z "${EXPLICIT_MODEL_NAME}" || -z "${EXPLICIT_MODEL_PATH}" ]]; then
@@ -73,10 +57,9 @@ if [[ -n "${EXPLICIT_MODEL_NAME}" || -n "${EXPLICIT_MODEL_PATH}" || -n "${EXPLIC
     exit 2
   fi
   ACTIVE_MODELS=("${EXPLICIT_MODEL_NAME}|${EXPLICIT_MODEL_PATH}|${EXPLICIT_EXTRA_ARGS}")
-elif [[ "$MODE" == "ci" ]]; then
-  ACTIVE_MODELS=("${CI_MODE_MODELS[@]}")
 else
-  ACTIVE_MODELS=("${FULL_MODE_MODELS[@]}")
+  echo "${MODE} mode requires OOT_MODEL_NAME and OOT_MODEL_PATH env vars from the workflow."
+  exit 2
 fi
 
 resolve_model_path() {
@@ -175,6 +158,12 @@ launch_one_model() {
   export TORCHINDUCTOR_CACHE_DIR=/root/.cache/inductor
   # FIXME: here disable the dual stream in OOT CI for avoid the hang issue
   export ATOM_DUAL_STREAM_MOE_TOKEN_THRESHOLD=0
+
+  if [[ -n "${OOT_ENV_VARS:-}" ]]; then
+    while IFS= read -r _env_line; do
+      [[ -n "${_env_line}" ]] && export "${_env_line}" && echo "Exported: ${_env_line}"
+    done <<< "$(printf '%b' "${OOT_ENV_VARS}")"
+  fi
   rm -rf /root/.cache
 
   rm -f "${VLLM_PID_FILE}" || true
@@ -187,8 +176,9 @@ launch_one_model() {
     --async-scheduling \
     --load-format fastsafetensors \
     --compilation-config '{"cudagraph_mode": "FULL_AND_PIECEWISE"}' \
-    "${extra_arg_array[@]}" \
+    --trust-remote-code \
     --kv-cache-dtype fp8 \
+    "${extra_arg_array[@]}" \
     --gpu-memory-utilization 0.9 \
     --no-enable-prefix-caching \
     > "${VLLM_LOG_FILE}" 2>&1 &

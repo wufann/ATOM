@@ -45,6 +45,7 @@ from aiter.ops.triton.fused_fp8_quant import (
     fused_reduce_rms_fp8_group_quant,
     fused_rms_fp8_group_quant,
 )
+from aiter import fused_qk_rmsnorm
 from aiter.ops.triton.fused_mxfp4_quant import (
     fused_reduce_rms_mxfp4_quant,
     fused_rms_mxfp4_quant,
@@ -106,6 +107,7 @@ if use_triton_gemm():
         gemm_a16w8_blockscale_preshuffle = None
 
 ENABLE_DS_QKNORM_QUANT_FUSION = envs.ATOM_ENABLE_DS_QKNORM_QUANT_FUSION
+ENABLE_DS_QKNORM_FUSION = envs.ATOM_ENABLE_DS_QKNORM_FUSION
 ENABLE_ALLREDUCE_RMSNORM_FUSION = envs.ATOM_ENABLE_ALLREDUCE_RMSNORM_FUSION
 ENABLE_DS_INPUT_RMSNORM_QUANT_FUSION = envs.ATOM_ENABLE_DS_INPUT_RMSNORM_QUANT_FUSION
 
@@ -1138,7 +1140,10 @@ class Indexer(nn.Module):
         )
         self.k_norm = LayerNorm(self.head_dim, eps=1e-6)
         self.weights_proj = ReplicatedLinear(
-            hidden_size, self.n_head, quant_config=None, prefix=f"{prefix}.weights_proj"
+            hidden_size,
+            self.n_head,
+            quant_config=None,
+            prefix=f"{prefix}.weights_proj",
         )
         self.softmax_scale = self.head_dim**-0.5
 
@@ -1262,7 +1267,7 @@ class DeepseekV2MLAAttention(nn.Module):
         )
         layer_quant_dtype = quant_config.get_layer_quant_config(
             f"{prefix}.{q_a_proj_name}"
-        )["quant_dtype"]
+        ).quant_dtype
         if layer_quant_dtype == dtypes.fp4x2:
             if not use_triton_gemm():
                 source_quant_dtype = None
@@ -1274,9 +1279,7 @@ class DeepseekV2MLAAttention(nn.Module):
         else:
             source_quant_dtype = None
             # Check exclude patterns (e.g. W4A8 checkpoints exclude attention)
-            if quant_config is not None and quant_config.should_ignore_layer_quant(
-                prefix
-            ):
+            if quant_config is not None and quant_config._is_excluded(prefix):
                 quant_config = None
                 base_quant_config = None
             else:
@@ -1442,6 +1445,8 @@ class DeepseekV2MLAAttention(nn.Module):
         self.prefix = prefix
         self.quant_dtype = None
         self.fuse_qknorm_quant = False
+        # always fuse qknorm
+        self.fuse_qknorm = ENABLE_DS_QKNORM_FUSION
         if quant_config is not None and ENABLE_DS_QKNORM_QUANT_FUSION:
             if layer_quant_dtype == dtypes.fp8 or (
                 layer_quant_dtype == dtypes.fp4x2 and use_triton_gemm()
@@ -1513,6 +1518,16 @@ class DeepseekV2MLAAttention(nn.Module):
                         output_unquantized_inp1=False,
                         transpose_scale=True,
                     )
+                elif self.fuse_qknorm:
+                    hidden_states_or_q_c, kv_c_normed = fused_qk_rmsnorm(
+                        q_c,
+                        self.q_a_layernorm.weight,
+                        self.q_a_layernorm.eps,
+                        kv_c,
+                        self.kv_a_layernorm.weight,
+                        self.kv_a_layernorm.eps,
+                    )
+                    hidden_states_or_q_c_scale = None
                 else:
                     hidden_states_or_q_c = self.q_a_layernorm(q_c)
         else:
@@ -1522,7 +1537,7 @@ class DeepseekV2MLAAttention(nn.Module):
                 [self.kv_lora_rank, self.qk_rope_head_dim],
                 dim=-1,
             )
-        if not self.fuse_qknorm_quant:
+        if not self.fuse_qknorm_quant and not self.fuse_qknorm:
             kv_c_normed = self.kv_a_layernorm(kv_c)
             hidden_states_or_q_c_scale = None
         if self.is_v32 and self.indexer is not None:
@@ -1589,7 +1604,7 @@ class DeepseekV2DecoderLayer(nn.Module):
         self.quant_dtype = (
             None
             if quant_config is None
-            else quant_config.global_quant_config["quant_dtype"]
+            else quant_config.get_layer_quant_config(prefix).quant_dtype
         )
         self.fuse_input_norm_quant = False
         self.fuse_ar_input_norm = ENABLE_ALLREDUCE_RMSNORM_FUSION
