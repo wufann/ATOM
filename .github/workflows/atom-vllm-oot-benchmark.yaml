@@ -501,36 +501,18 @@ jobs:
       - name: Prepare model cache mount
         if: steps.check.outputs.enabled == 'true'
         run: |
-          model_cache_rel="${MODEL_PATH}"
-          if [[ "${model_cache_rel}" = /models/* ]]; then
-            model_cache_rel="${model_cache_rel#/models/}"
-          elif [[ "${model_cache_rel}" = /data/models/* ]]; then
-            model_cache_rel="${model_cache_rel#/data/models/}"
-          fi
-          MODEL_CACHE_HOST_ROOT=""
           MODEL_CACHE_MOUNT=""
           MODEL_CACHE_DESC="container-local /models (no host cache mount)"
-
-          if [ -d "/models/${model_cache_rel}" ] && [ -f "/models/${model_cache_rel}/config.json" ]; then
-            MODEL_CACHE_HOST_ROOT="/models"
-            MODEL_CACHE_DESC="/models (pre-provisioned host path)"
-          elif [ -d "/data/models/${model_cache_rel}" ] && [ -f "/data/models/${model_cache_rel}/config.json" ]; then
-            MODEL_CACHE_HOST_ROOT="/data/models"
-            MODEL_CACHE_DESC="/data/models (pre-provisioned host path)"
+          if [ -d "/it-share/models" ]; then
+            MODEL_CACHE_MOUNT="-v /it-share/models:/models"
+            MODEL_CACHE_DESC="/it-share/models (shared host path)"
           elif [ -d "/models" ]; then
-            MODEL_CACHE_HOST_ROOT="/models"
+            MODEL_CACHE_MOUNT="-v /models:/models"
             MODEL_CACHE_DESC="/models (shared host path)"
           elif [ -d "/data/models" ]; then
-            MODEL_CACHE_HOST_ROOT="/data/models"
+            MODEL_CACHE_MOUNT="-v /data/models:/models"
             MODEL_CACHE_DESC="/data/models (shared host path)"
-          fi
-
-          if [ -n "${MODEL_CACHE_HOST_ROOT}" ]; then
-            MODEL_CACHE_MOUNT="-v ${MODEL_CACHE_HOST_ROOT}:/models"
-            echo "Model cache host root: ${MODEL_CACHE_HOST_ROOT}"
-          fi
-
-          if [ -z "${MODEL_CACHE_MOUNT}" ]; then
+          else
             echo "No shared host model cache found; using container-local /models."
           fi
 
@@ -588,29 +570,41 @@ jobs:
         if: steps.check.outputs.enabled == 'true'
         run: |
           model_dir="${MODEL_PATH}"
-          if [[ "${model_dir}" != /* ]]; then
+          if [[ "${model_dir}" = /models/* ]]; then
+            model_dir="/models/${model_dir#/models/}"
+          elif [[ "${model_dir}" = /it-share/models/* ]]; then
+            model_dir="/models/${model_dir#/it-share/models/}"
+          elif [[ "${model_dir}" = /data/models/* ]]; then
+            model_dir="/models/${model_dir#/data/models/}"
+          elif [[ "${model_dir}" != /* ]]; then
             model_dir="/models/${model_dir}"
           fi
-          if docker exec "$CONTAINER_NAME" bash -lc "[ -d \"$model_dir\" ] && [ -f \"$model_dir/config.json\" ]"; then
-            echo "Model already exists under ${model_dir}; skip download"
-          else
-            echo "Model not found under ${model_dir}; downloading model"
+          if [ -n "${MODEL_CACHE_MOUNT}" ]; then
+            echo "/models directory found, downloading model to ${model_dir}"
             if ! docker exec -e HF_TOKEN="${HF_TOKEN:-}" "$CONTAINER_NAME" bash -lc "hf download \"${MODEL_SOURCE_PATH}\" --local-dir \"$model_dir\""; then
               echo "Model download failed for '${MODEL_SOURCE_PATH}'. Aborting."
               exit 1
             fi
+          else
+            echo "/models directory not mounted; skipping model download"
           fi
 
       - name: Resolve OOT model path
         if: steps.check.outputs.enabled == 'true'
         run: |
           model_dir="${MODEL_PATH}"
-          if [[ "${model_dir}" != /* ]]; then
+          if [[ "${model_dir}" = /models/* ]]; then
+            model_dir="/models/${model_dir#/models/}"
+          elif [[ "${model_dir}" = /it-share/models/* ]]; then
+            model_dir="/models/${model_dir#/it-share/models/}"
+          elif [[ "${model_dir}" = /data/models/* ]]; then
+            model_dir="/models/${model_dir#/data/models/}"
+          elif [[ "${model_dir}" != /* ]]; then
             model_dir="/models/${model_dir}"
           fi
-          if docker exec "$CONTAINER_NAME" bash -lc "[ -d \"${model_dir}\" ] && [ -f \"${model_dir}/config.json\" ]"; then
+          if [ -n "${MODEL_CACHE_MOUNT}" ]; then
             echo "OOT_RESOLVED_MODEL_PATH=${model_dir}" >> "$GITHUB_ENV"
-            echo "Using pre-downloaded model path: ${model_dir}"
+            echo "Using mounted model path: ${model_dir}"
           else
             echo "OOT_RESOLVED_MODEL_PATH=${MODEL_SOURCE_PATH}" >> "$GITHUB_ENV"
             echo "Using model id: ${MODEL_SOURCE_PATH}"

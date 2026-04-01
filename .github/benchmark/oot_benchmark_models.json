@@ -6,7 +6,7 @@
     "prefix": "deepseek-r1-fp8",
     "extra_args": "--trust-remote-code --tensor-parallel-size 8 --max-num-batched-tokens 16384 --max-model-len 16384",
     "bench_args": "",
-    "runner": "atom-mi355-8gpu.predownload",
+    "runner": "atom-mi355-8gpu-oot-benchmark",
     "env_vars": "AITER_QUICK_REDUCE_QUANTIZATION=INT4"
   },
   {
@@ -16,7 +16,7 @@
     "prefix": "deepseek-r1-mxfp4",
     "extra_args": "--trust-remote-code --tensor-parallel-size 8 --max-num-batched-tokens 16384 --max-model-len 16384",
     "bench_args": "",
-    "runner": "atom-mi355-8gpu.predownload",
+    "runner": "atom-mi355-8gpu-oot-benchmark",
     "env_vars": "AITER_QUICK_REDUCE_QUANTIZATION=INT4"
   },
   {
@@ -26,7 +26,7 @@
     "prefix": "gpt-oss-120b",
     "extra_args": "--trust-remote-code --tensor-parallel-size 1 --max-num-batched-tokens 16384 --max-model-len 16384",
     "bench_args": "",
-    "runner": "atom-mi355-8gpu.predownload",
+    "runner": "atom-mi355-8gpu-oot-benchmark",
     "env_vars": "ATOM_ENABLE_QK_NORM_ROPE_CACHE_QUANT_FUSION=1"
   },
   {
@@ -37,7 +37,7 @@
     "prefix": "kimi-k2-thinking-mxfp4-tp4",
     "extra_args": "--trust-remote-code --tensor-parallel-size 4 --max-num-batched-tokens 16384 --max-model-len 16384",
     "bench_args": "",
-    "runner": "atom-mi355-8gpu.predownload",
+    "runner": "atom-mi355-8gpu-oot-benchmark",
     "env_vars": "AITER_QUICK_REDUCE_QUANTIZATION=INT4"
   },
   {
@@ -48,7 +48,7 @@
     "prefix": "kimi-k2-thinking-mxfp4-tp8",
     "extra_args": "--trust-remote-code --tensor-parallel-size 8 --max-num-batched-tokens 16384 --max-model-len 16384",
     "bench_args": "",
-    "runner": "atom-mi355-8gpu.predownload",
+    "runner": "atom-mi355-8gpu-oot-benchmark",
     "env_vars": "AITER_QUICK_REDUCE_QUANTIZATION=INT4"
   },
   {
@@ -59,7 +59,7 @@
     "prefix": "kimi-k25-mxfp4-tp8",
     "extra_args": "--trust-remote-code --tensor-parallel-size 8",
     "bench_args": "",
-    "runner": "atom-mi355-8gpu.predownload",
+    "runner": "atom-mi355-8gpu-oot-benchmark",
     "env_vars": "AITER_QUICK_REDUCE_QUANTIZATION=INT4"
   },
   {
@@ -70,7 +70,7 @@
     "prefix": "qwen3-5-397b-a17b-fp8",
     "extra_args": "--trust-remote-code --tensor-parallel-size 8 --max-num-batched-tokens 16384 --max-model-len 16384",
     "bench_args": "",
-    "runner": "atom-mi355-8gpu.predownload",
+    "runner": "atom-mi355-8gpu-oot-benchmark",
     "env_vars": "AITER_QUICK_REDUCE_QUANTIZATION=INT4\nATOM_DISABLE_VLLM_PLUGIN_ATTENTION=1",
     "excluded_input_output_pairs": ["1024x8192"]
   },
@@ -82,7 +82,7 @@
     "prefix": "qwen3-next-80b-a3b-instruct-fp8-tp1",
     "extra_args": "--trust-remote-code --tensor-parallel-size 1 --max-num-batched-tokens 32768 --max-model-len 16384",
     "bench_args": "",
-    "runner": "atom-mi355-8gpu.predownload",
+    "runner": "atom-mi355-8gpu-oot-benchmark",
     "env_vars": "AITER_QUICK_REDUCE_QUANTIZATION=INT4\nATOM_DISABLE_VLLM_PLUGIN_ATTENTION=1\nATOM_USE_CUSTOM_ALL_GATHER=0"
   },
   {
@@ -93,7 +93,7 @@
     "prefix": "qwen3-next-80b-a3b-instruct-fp8-tp4",
     "extra_args": "--trust-remote-code --tensor-parallel-size 4 --max-num-batched-tokens 32768 --max-model-len 16384",
     "bench_args": "",
-    "runner": "atom-mi355-8gpu.predownload",
+    "runner": "atom-mi355-8gpu-oot-benchmark",
     "env_vars": "AITER_QUICK_REDUCE_QUANTIZATION=INT4\nATOM_DISABLE_VLLM_PLUGIN_ATTENTION=1\nATOM_USE_CUSTOM_ALL_GATHER=0"
   }
 ]
