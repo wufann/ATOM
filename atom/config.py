@@ -749,6 +749,7 @@ class Config:
     num_kvcache_blocks: int = -1
     kv_cache_dtype: str = "bf16"
     enable_prefix_caching: bool = False
+    enable_chunked_prefill: bool = True
     port: int = 8006
     torch_profiler_dir: str | None = field(
         default_factory=lambda: envs.ATOM_TORCH_PROFILER_DIR
@@ -812,6 +813,20 @@ class Config:
             ) is not None:
                 self.stop_token_ids = [eos_ids] if isinstance(eos_ids, int) else eos_ids
         self.quant_config = QuantizationConfig(self.hf_config)
+
+        # TODO: MLA prefix cache supports FP4/MXFP4 using 1x32 group scaling
+        is_mla = getattr(self.hf_config, "q_lora_rank", None) is not None
+        if (
+            self.enable_chunked_prefill
+            and is_mla
+            and self.quant_config.quant_type == QuantType.per_1x32
+        ):
+            self.enable_chunked_prefill = False
+            logger.info(
+                "Chunked prefill auto-disabled for FP4/MXFP4 MLA model "
+                "(gather_kv_b_proj requires fp8 block scales)"
+            )
+
         # In plugin mode, supplement exclude_layers with vLLM's ignored_layers when
         # the HF quant config didn't produce any exclusions (non-quark quant methods).
         if (
