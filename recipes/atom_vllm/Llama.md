@@ -1,6 +1,6 @@
-# Llama-3 (70B + 405B FP8) with ATOM vLLM Plugin Backend
+# Llama-3 (70B + 405B MXFP4) with ATOM vLLM Plugin Backend
 
-This recipe shows how to run `meta-llama/Llama-3.1-70B-Instruct` and `meta-llama/Llama-3.1-405B-Instruct-FP8` with the ATOM vLLM plugin backend. For background on the plugin backend, see [ATOM vLLM Plugin Backend](../../docs/vllm_plugin_backend_guide.md).
+This recipe shows how to run `meta-llama/Llama-3.1-70B-Instruct` and `amd/Llama-3.1-405B-Instruct-MXFP4-Preview` with the ATOM vLLM plugin backend. For background on the plugin backend, see [ATOM vLLM Plugin Backend](../../docs/vllm_plugin_backend_guide.md).
 
 ## Step 1: Pull the OOT Docker
 
@@ -32,10 +32,10 @@ vllm serve meta-llama/Llama-3.1-70B-Instruct \
     --no-enable-prefix-caching
 ```
 
-### Llama-3.1-405B-Instruct-FP8 (TP=8)
+### Llama-3.1-405B-Instruct-MXFP4-Preview (TP=8)
 
 ```bash
-vllm serve meta-llama/Llama-3.1-405B-Instruct-FP8 \
+vllm serve amd/Llama-3.1-405B-Instruct-MXFP4-Preview \
     --host localhost \
     --port 8000 \
     --tensor-parallel-size 8 \
@@ -76,11 +76,11 @@ lm_eval --model local-completions \
         --num_fewshot 3
 ```
 
-### Llama-3.1-405B-Instruct-FP8
+### Llama-3.1-405B-Instruct-MXFP4-Preview
 
 ```bash
 lm_eval --model local-completions \
-        --model_args model=meta-llama/Llama-3.1-405B-Instruct-FP8,base_url=http://localhost:8000/v1/completions,num_concurrent=16,max_retries=3,tokenized_requests=False \
+        --model_args model=amd/Llama-3.1-405B-Instruct-MXFP4-Preview,base_url=http://localhost:8000/v1/completions,num_concurrent=16,max_retries=3,tokenized_requests=False \
         --tasks gsm8k \
         --num_fewshot 3
 ```
@@ -88,4 +88,4 @@ lm_eval --model local-completions \
 ## CI Alignment Notes
 
 - `Llama-3.1-70B-Instruct` uses TP=1 in nightly accuracy (`RUN_LLAMA70_TP1`).
-- `Llama-3.1-405B-Instruct-FP8` uses TP=8 in nightly accuracy (`RUN_LLAMA405_FP8_TP8`).
+- `Llama-3.1-405B-Instruct-MXFP4-Preview` uses TP=8 in nightly accuracy (`RUN_LLAMA405_MXFP4_TP8`).
