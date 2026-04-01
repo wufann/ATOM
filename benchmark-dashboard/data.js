@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1775000280579,
+  "lastUpdate": 1775015173955,
   "repoUrl": "https://github.com/ROCm/ATOM",
   "entries": {
     "Benchmark": [
@@ -63954,6 +63954,84 @@ window.BENCHMARK_DATA = {
             "name": "ATOM-vLLM::Qwen3-Next-80B-A3B-Instruct-FP8-tp4 8192/1024 c=8 _gpu_count",
             "value": 4,
             "unit": ""
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "thiago.pereirarocha@amd.com",
+            "name": "Thiago Pereira Rocha",
+            "username": "thpereir"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "b3128fb32e7a94fe3d9e413a7be3a78e201e86f1",
+          "message": "Fix GLM-5-FP8 Indexer.weights_proj GEMM crash via model-declared exclude name mapping (#451)\n\nGLM-5's HF quant config lists `indexers_proj` in modules_to_not_convert, but\nATOM's actual module path is `model.layers.N.self_attn.indexer.weights_proj`.\nThe exclude list entries are fully-qualified (e.g.\n`model.layers.0.self_attn.indexers_proj`), so the translation must use\nstr.replace to do substring substitution on each entry.\n\nFix:\n- Add `quant_exclude_name_mapping` to `remap_layer_name()` as a generic\n  mechanism for translating HF quant config exclude names to ATOM module paths.\n- `GlmMoeDsaForCausalLM` declares the mapping as a class attribute alongside\n  `packed_modules_mapping`, keeping the translation co-located with the model.\n- config.py iterates each exclude entry and applies str.replace for every\n  mapping pair, so `model.layers.0.self_attn.indexers_proj` becomes\n  `model.layers.0.self_attn.indexer.weights_proj` and is correctly matched by\n  _is_excluded()'s exact/prefix logic.\n- `model_runner.py` passes it through via `getattr(model_class, ...)`,\n  consistent with how `packed_modules_mapping` is already threaded.\n- Removes previous fix `quant_config=None` from `Indexer.weights_proj`.\n\nFuture models with HF-name/ATOM-path mismatches declare\n`quant_exclude_name_mapping` on their class so no model_type branches\nneeded in config.py.",
+          "timestamp": "2026-04-01T11:08:01+08:00",
+          "tree_id": "f29c6362bc26661618a12ad2bde72d718c1e9784",
+          "url": "https://github.com/ROCm/ATOM/commit/b3128fb32e7a94fe3d9e413a7be3a78e201e86f1"
+        },
+        "date": 1775015173165,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ATOM::DeepSeek-R1-0528 accuracy (GSM8K)",
+            "value": 0.9447,
+            "unit": "score",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23829997346 | Threshold: 0.94 | Baseline: 0.9553 | BaselineModel: deepseek-ai/DeepSeek-R1-0528 | BaselineNote: CI measured FP8 baseline (GSM8K 3-shot flexible-extract) | strict-match: 0.9409 | fewshot: 3 | Model: /models/deepseek-ai/DeepSeek-R1-0528"
+          },
+          {
+            "name": "ATOM::DeepSeek-R1-0528 MTP accuracy (GSM8K)",
+            "value": 0.9439,
+            "unit": "score",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23829997346 | Threshold: 0.94 | Baseline: 0.9553 | BaselineModel: deepseek-ai/DeepSeek-R1-0528 | BaselineNote: Same base model as DeepSeek-R1-0528 FP8 | strict-match: 0.9393 | fewshot: 3 | Model: /models/deepseek-ai/DeepSeek-R1-0528"
+          },
+          {
+            "name": "ATOM::DeepSeek-R1-0528-FP4 accuracy (GSM8K)",
+            "value": 0.9401,
+            "unit": "score",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23829997346 | Threshold: 0.93 | Baseline: 0.9553 | BaselineModel: deepseek-ai/DeepSeek-R1-0528 | BaselineNote: CI measured FP8 baseline (deepseek-ai/DeepSeek-R1-0528 is natively FP8) | strict-match: 0.9371 | fewshot: 3 | Model: /models/amd/DeepSeek-R1-0528-MXFP4-MTP-MoEFP4"
+          },
+          {
+            "name": "ATOM::DeepSeek-R1-0528-FP4 MTP accuracy (GSM8K)",
+            "value": 0.9416,
+            "unit": "score",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23829997346 | Threshold: 0.93 | Baseline: 0.9553 | BaselineModel: deepseek-ai/DeepSeek-R1-0528 | BaselineNote: CI measured FP8 baseline (deepseek-ai/DeepSeek-R1-0528 is natively FP8) | strict-match: 0.934 | fewshot: 3 | Model: /models/amd/DeepSeek-R1-0528-MXFP4-MTP-MoEFP4"
+          },
+          {
+            "name": "ATOM::Llama-3.3-70B-Instruct-MXFP4-Preview accuracy (GSM8K)",
+            "value": 0.9067,
+            "unit": "score",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23829997346 | Threshold: 0.88 | BaselineModel: meta-llama/Llama-3.3-70B-Instruct | BaselineNote: HF page inaccessible; needs CI measurement of baseline | strict-match: 0.6202 | fewshot: 3 | Model: /models/amd/Llama-3.3-70B-Instruct-MXFP4-Preview"
+          },
+          {
+            "name": "ATOM::Meta-Llama-3-8B-Instruct accuracy (GSM8K)",
+            "value": 0.743,
+            "unit": "score",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23829997346 | Threshold: 0.73 | BaselineModel: meta-llama/Meta-Llama-3-8B-Instruct | BaselineNote: HF reports 0.796 but 8-shot CoT; CI uses 3-shot, not comparable | strict-match: 0.746 | fewshot: 3 | Model: /models/meta-llama/Meta-Llama-3-8B-Instruct"
+          },
+          {
+            "name": "ATOM::Qwen3-235B-A22B-Instruct-2507-FP8 accuracy (GSM8K)",
+            "value": 0.8984,
+            "unit": "score",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23829997346 | Threshold: 0.87 | Baseline: 0.909 | BaselineModel: Qwen/Qwen3-235B-A22B-Instruct-2507 | BaselineNote: HF: amd/Qwen3-235B-A22B-Instruct-2507-MXFP4 card shows baseline=0.909 | strict-match: 0.8825 | fewshot: 3 | Model: /models/Qwen/Qwen3-235B-A22B-Instruct-2507-FP8"
+          },
+          {
+            "name": "ATOM::Qwen3-Next-80B-A3B-Thinking accuracy (GSM8K)",
+            "value": 0.696,
+            "unit": "score",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23829997346 | Threshold: 0.65 | BaselineModel: Qwen/Qwen3-Next-80B-A3B-Thinking | BaselineNote: No public GSM8K baseline; HF card has no GSM8K | strict-match: 0.7938 | fewshot: 3 | Model: /models/Qwen/Qwen3-Next-80B-A3B-Thinking"
+          },
+          {
+            "name": "ATOM::gpt-oss-120b accuracy (GSM8K)",
+            "value": 0.4344,
+            "unit": "score",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23829997346 | Threshold: 0.38 | BaselineModel: openai/gpt-oss-120b | BaselineNote: No public GSM8K baseline available | strict-match: 0.2555 | fewshot: 3 | Model: /models/openai/gpt-oss-120b"
           }
         ]
       }
