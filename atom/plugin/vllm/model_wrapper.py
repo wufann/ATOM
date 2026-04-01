@@ -99,6 +99,13 @@ class ATOMModelBase(nn.Module, VllmModel, SupportsQuant, SupportsPP):
         model_arch = vllm_config.model_config.architectures[0]
         model_cls = _get_atom_model_cls(model_arch)
 
+        # In ATOM, quant_exclude_name_mapping is used to translate the HF module names
+        # to ATOM's format. It is invoked in ATOM's model_runner initialization, but
+        # lacks correspondences in vLLM. So we invoke the translation here for vLLM OOT.
+        exclude_mapping = getattr(model_cls, "quant_exclude_name_mapping", {})
+        if exclude_mapping and self.atom_config.quant_config is not None:
+            self.atom_config.quant_config.apply_exclude_name_mapping(exclude_mapping)
+
         logger.info(f"Construct ATOM model {model_arch} for vLLM plugin mode")
         self.model = model_cls(self.atom_config)
 
