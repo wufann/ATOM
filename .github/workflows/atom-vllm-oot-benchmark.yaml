@@ -47,6 +47,10 @@ on:
         description: "Prebuilt OOT benchmark image used only for main-branch runs; ignored for non-main branches because a custom image is rebuilt from the selected branch"
         type: string
         default: "rocm/atom-dev:vllm-latest"
+      publish_to_dashboard:
+        description: "Upload benchmark results to the dashboard"
+        type: boolean
+        default: true
       param_lists:
         description: |
           "Benchmark parameter lists.
@@ -80,6 +84,7 @@ jobs:
         id: resolve
         env:
           INPUT_OOT_IMAGE: ${{ inputs.oot_image || '' }}
+          INPUT_PUBLISH_TO_DASHBOARD: ${{ inputs.publish_to_dashboard }}
         run: |
           set -euo pipefail
 
@@ -101,10 +106,7 @@ jobs:
             OOT_IMAGE_SOURCE="rebuild"
           fi
 
-          PUBLISH_TO_DASHBOARD=false
-          if [[ "${REBUILD_OOT_IMAGE}" != "true" && "${NORMALIZED_REF}" == "main" ]]; then
-            PUBLISH_TO_DASHBOARD=true
-          fi
+          PUBLISH_TO_DASHBOARD="${INPUT_PUBLISH_TO_DASHBOARD:-true}"
 
           mapfile -t VLLM_META < <(python3 - <<'PY'
           import re
@@ -162,7 +164,7 @@ jobs:
             "${PUBLISH_TO_DASHBOARD}" >> "$GITHUB_STEP_SUMMARY"
 
           if [[ "${PUBLISH_TO_DASHBOARD}" != "true" ]]; then
-            printf '\nNon-main or overridden ATOM sources keep benchmark results in artifacts and run summaries only.\n' \
+            printf '\nDashboard upload is disabled by workflow input, so results are kept in artifacts and run summaries only.\n' \
               >> "$GITHUB_STEP_SUMMARY"
           fi
 
@@ -814,12 +816,12 @@ jobs:
       - name: Note summary behavior
         run: |
           if [[ "${{ needs.resolve-atom-source.outputs.publish_to_dashboard }}" == "true" ]]; then
-            printf '### Summary mode\nResults from `%s@%s` using `%s` OOT image mode are shown below as a workflow summary table. Because this run is dashboard-eligible, successful cases will also be used for regression comparison and dashboard upload.\n' \
+            printf '### Summary mode\nResults from `%s@%s` using `%s` OOT image mode are shown below as a workflow summary table. Because dashboard upload is enabled for this run, successful cases will also be used for regression comparison and dashboard upload.\n' \
               "${{ needs.resolve-atom-source.outputs.atom_repository }}" \
               "${{ needs.resolve-atom-source.outputs.atom_ref }}" \
               "${{ needs.resolve-atom-source.outputs.oot_image_source }}" >> "$GITHUB_STEP_SUMMARY"
           else
-            printf '### Summary mode\nResults from `%s@%s` using `%s` OOT image mode are shown below as a workflow summary table only. Dashboard upload is skipped.\n' \
+            printf '### Summary mode\nResults from `%s@%s` using `%s` OOT image mode are shown below as a workflow summary table only. Dashboard upload is disabled for this run.\n' \
               "${{ needs.resolve-atom-source.outputs.atom_repository }}" \
               "${{ needs.resolve-atom-source.outputs.atom_ref }}" \
               "${{ needs.resolve-atom-source.outputs.oot_image_source }}" >> "$GITHUB_STEP_SUMMARY"
