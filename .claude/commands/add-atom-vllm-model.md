@@ -31,7 +31,8 @@ Model onboarding progress:
 - [ ] 4) Plugin registration completed (if needed)
 - [ ] 5) Smoke test passed
 - [ ] 6) Accuracy eval completed
-- [ ] 7) CI matrix entry added
+- [ ] 7) `recipes/atom_vllm` recipe added/updated
+- [ ] 8) CI matrix entry added
 ```
 
 ### 1) Reuse Analysis (Do This First)
@@ -76,7 +77,7 @@ For plugin mode support, update `atom/plugin/register.py`:
 
 If the model is ATOM-only and not used through plugin path, explicitly document why plugin registration is skipped.
 
-### 5) Validate
+### 5) Smoke Test
 
 Run a quick smoke test with `vllm serve`:
 
@@ -89,6 +90,8 @@ vllm serve <model_path> \
   --trust-remote-code
 ```
 
+### 6) Accuracy Validation
+
 In another terminal, run accuracy validation:
 
 ```bash
@@ -97,7 +100,26 @@ lm_eval --model local-completions \
   --tasks gsm8k --num_fewshot 5
 ```
 
-### 6) Add CI Test Entry
+### 7) Add `recipes/atom_vllm` Entry
+
+For every new model added to ATOM vLLM plugin support, also add or update a usage recipe under:
+
+- `recipes/atom_vllm/<Model-Name>.md`
+
+Minimum recipe content:
+
+1. One-line scope: model name + backend context (`ATOM vLLM plugin backend`)
+2. `docker pull` step (`rocm/atom-dev:vllm-latest`)
+3. `vllm serve` launch commands (include the exact model path and key args such as TP, KV dtype, async scheduling)
+4. Optional benchmark command (`vllm bench serve` or project benchmark script)
+5. Accuracy validation command (`lm_eval --model local-completions ...`)
+6. Any model-specific env vars and caveats (for example, plugin attention toggle if required)
+
+Use existing files in `recipes/atom_vllm/` (such as `DeepSeek-R1.md`, `Qwen3.5.md`, `Kimi-K2.5.md`) as style references.
+
+If this onboarding also updates CI matrix arguments (TP size, env vars, model id), make sure the recipe launch command is aligned with those CI settings.
+
+### 8) Add CI Test Entry
 
 Update `.github/workflows/atom-vllm-oot-test.yaml` and add the model entry to the
 **nightly accuracy path only**.
@@ -141,5 +163,6 @@ When done, report:
 3. New architecture key(s) registered
 4. Smoke and accuracy results
 5. CI entry details
-6. Any follow-up risks or TODOs
+6. Recipe file path and key launch command
+7. Any follow-up risks or TODOs
 
