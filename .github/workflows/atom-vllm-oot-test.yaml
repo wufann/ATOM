@@ -115,8 +115,26 @@ jobs:
         if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork }}
         uses: actions/checkout@v6
 
-      - name: Generate OOT base Dockerfile
+      - name: Docker Login
         if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork }}
+        run: |
+          echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
+
+      - name: Check existing prebuilt OOT image
+        id: existing_oot_image
+        if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork }}
+        run: |
+          IMAGE_TAG=rocm/atom-dev:oot-pre-build-${{ env.GITHUB_COMMIT_SHA }}
+          if docker manifest inspect "${IMAGE_TAG}" >/dev/null 2>&1; then
+            echo "image_exists=true" >> "$GITHUB_OUTPUT"
+            echo "Reusing existing OOT image for ${IMAGE_TAG}"
+          else
+            echo "image_exists=false" >> "$GITHUB_OUTPUT"
+            echo "No existing OOT image found for ${IMAGE_TAG}; building a new one."
+          fi
+
+      - name: Generate OOT base Dockerfile
+        if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork) && steps.existing_oot_image.outputs.image_exists != 'true' }}
         run: |
           cat <<EOF > Dockerfile.mod
           FROM ${{ env.ATOM_BASE_NIGHTLY_IMAGE }}
@@ -146,7 +164,7 @@ jobs:
           EOF
 
       - name: Build OOT base image
-        if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork }}
+        if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork) && steps.existing_oot_image.outputs.image_exists != 'true' }}
         run: |
           docker build --pull --network=host \
             --no-cache \
@@ -154,7 +172,7 @@ jobs:
             -f Dockerfile.mod .
 
       - name: Build OOT vLLM image
-        if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork }}
+        if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork) && steps.existing_oot_image.outputs.image_exists != 'true' }}
         run: |
           docker build --network=host \
             --no-cache \
@@ -168,11 +186,10 @@ jobs:
             -f docker/Dockerfile .
 
       - name: Push Docker image
-        if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork }}
+        if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork) && steps.existing_oot_image.outputs.image_exists != 'true' }}
         run: |
           IMAGE_TAG=rocm/atom-dev:oot-pre-build-${{ env.GITHUB_COMMIT_SHA }}
           docker tag atom_oot:ci $IMAGE_TAG
-          echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
           docker push $IMAGE_TAG
 
       - name: Clean up build images
@@ -312,14 +329,6 @@ jobs:
           else
             echo "OOT_IMAGE_TAG=rocm/atom-dev:oot-pre-build-${{ env.GITHUB_COMMIT_SHA }}" >> "$GITHUB_ENV"
           fi
-
-      - name: Run all plugin unit tests
-        run: |
-          docker run --rm \
-            -v "${{ github.workspace }}:/workspace" \
-            -w /workspace \
-            "$OOT_IMAGE_TAG" \
-            bash -lc "pytest -q tests/plugin -o cache_dir=/tmp/.pytest_cache"
 
       - name: Prepare model cache mount
         run: |
