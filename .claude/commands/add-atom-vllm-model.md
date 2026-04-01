@@ -78,13 +78,18 @@ If the model is ATOM-only and not used through plugin path, explicitly document 
 
 ### 5) Validate
 
-Run a quick smoke test:
+Run a quick smoke test with `vllm serve`:
 
 ```bash
-python -m atom.examples.simple_inference --model <model_path> --kv_cache_dtype fp8
+vllm serve <model_path> \
+  --host localhost \
+  --port 8000 \
+  --tensor-parallel-size 8 \
+  --kv-cache-dtype fp8 \
+  --trust-remote-code
 ```
 
-Run accuracy validation:
+In another terminal, run accuracy validation:
 
 ```bash
 lm_eval --model local-completions \
@@ -94,19 +99,30 @@ lm_eval --model local-completions \
 
 ### 6) Add CI Test Entry
 
-Update `.github/workflows/atom-test.yaml` in `matrix.include`:
+Update `.github/workflows/atom-vllm-oot-test.yaml` and add the model entry to the
+**nightly accuracy path only**.
 
-```yaml
-- model_name: "New-Model-Name"
-  model_path: "org/model-name"
-  extraArgs: "--kv_cache_dtype fp8 -tp 8"
-  env_vars: ""
-  accuracy_test_threshold: "0.XX"
-  runner: atom-mi355-8gpu.predownload
-  run_on_pr: true
+Do **not** add this model to the pull-request OOT matrix (`jobs.atom-vllm-oot.strategy.matrix.include`).
+
+Add it in `jobs.prepare-oot-image -> step "Resolve image source and model matrix"` in
+the Python `models = [...]` list:
+
+```python
+{
+    "toggle_env": "RUN_NEW_MODEL_TP8",
+    "model_name": "New-Model-Name TP8",
+    "model_path": "org/model-name",
+    "extra_args": "--tensor-parallel-size 8",
+    "accuracy_test_threshold": 0.XX,
+    "env_vars": "",
+    "runner": "linux-atom-mi35x-8",
+},
 ```
 
-Set `accuracy_test_threshold` based on actual validation results, not guesswork.
+If this model should be **nightly only** (not selectable in manual workflow_dispatch),
+do not add a corresponding input toggle under `on.workflow_dispatch.inputs`.
+
+Set `accuracy_test_threshold` from real eval results, not guesswork.
 
 ## Guardrails
 
