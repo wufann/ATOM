@@ -42,6 +42,11 @@ on:
         required: false
         type: boolean
         default: false
+      run_kimi_k25_tp8:
+        description: "Kimi-K2.5-MXFP4 TP8"
+        required: false
+        type: boolean
+        default: false
       run_dsr1_fp8_tp8:
         description: "DeepSeek-R1-FP8 TP8"
         required: false
@@ -509,6 +514,7 @@ jobs:
           RUN_QWEN35_397B_FP8_TP8: ${{ inputs.run_qwen35_397b_fp8_tp8 }}
           RUN_QWEN35_397B_TP8: ${{ inputs.run_qwen35_397b_tp8 }}
           RUN_KIMI_K2_TP8: ${{ inputs.run_kimi_k2_tp8 }}
+          RUN_KIMI_K25_TP8: ${{ inputs.run_kimi_k25_tp8 }}
           RUN_DSR1_FP8_TP8: ${{ inputs.run_dsr1_fp8_tp8 }}
           RUN_DSR1_FP4_TP8: ${{ inputs.run_dsr1_fp4_tp8 }}
           RUN_GPT_OSS_120B_TP1: ${{ inputs.run_gpt_oss_120b_tp1 }}
@@ -567,6 +573,15 @@ jobs:
                   "model_path": "amd/Kimi-K2-Thinking-MXFP4",
                   "extra_args": "--tensor-parallel-size 8",
                   "accuracy_test_threshold": 0.90,
+                  "env_vars": "",
+                  "runner": "linux-atom-mi35x-8",
+              },
+              {
+                  "toggle_env": "RUN_KIMI_K25_TP8",
+                  "model_name": "Kimi-K2.5-MXFP4 TP8",
+                  "model_path": "amd/Kimi-K2.5-MXFP4",
+                  "extra_args": "--tensor-parallel-size 8",
+                  "accuracy_test_threshold": 0.93,
                   "env_vars": "",
                   "runner": "linux-atom-mi35x-8",
               },

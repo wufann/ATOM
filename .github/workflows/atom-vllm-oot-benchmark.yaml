@@ -27,6 +27,10 @@ on:
         description: "Kimi-K2-Thinking-MXFP4 TP8"
         type: boolean
         default: false
+      kimi-k2-5-mxfp4-tp8:
+        description: "Kimi-K2.5-MXFP4 TP8"
+        type: boolean
+        default: false
       qwen3-5-397b-a17b-fp8:
         description: "Qwen3.5-397B-A17B-FP8 TP8"
         type: boolean
@@ -216,6 +220,7 @@ jobs:
           ENABLE_GPT_OSS_120B: ${{ inputs.gpt-oss-120b }}
           ENABLE_KIMI_K2_TP4: ${{ inputs.kimi-k2-thinking-mxfp4-tp4 }}
           ENABLE_KIMI_K2_TP8: ${{ inputs.kimi-k2-thinking-mxfp4-tp8 }}
+          ENABLE_KIMI_K25_TP8: ${{ inputs.kimi-k2-5-mxfp4-tp8 }}
           ENABLE_QWEN3_5_397B_A17B_FP8: ${{ inputs.qwen3-5-397b-a17b-fp8 }}
           ENABLE_QWEN3_NEXT_80B_A3B_INSTRUCT_FP8_TP1: ${{ inputs.qwen3-next-80b-a3b-instruct-fp8-tp1 }}
           ENABLE_QWEN3_NEXT_80B_A3B_INSTRUCT_FP8_TP4: ${{ inputs.qwen3-next-80b-a3b-instruct-fp8-tp4 }}
@@ -227,6 +232,7 @@ jobs:
               or (.prefix == "gpt-oss-120b" and env.ENABLE_GPT_OSS_120B == "true")
               or (.prefix == "kimi-k2-thinking-mxfp4-tp4" and env.ENABLE_KIMI_K2_TP4 == "true")
               or (.prefix == "kimi-k2-thinking-mxfp4-tp8" and env.ENABLE_KIMI_K2_TP8 == "true")
+              or (.prefix == "kimi-k25-mxfp4-tp8" and env.ENABLE_KIMI_K25_TP8 == "true")
               or (.prefix == "qwen3-5-397b-a17b-fp8" and env.ENABLE_QWEN3_5_397B_A17B_FP8 == "true")
               or (.prefix == "qwen3-next-80b-a3b-instruct-fp8-tp1" and env.ENABLE_QWEN3_NEXT_80B_A3B_INSTRUCT_FP8_TP1 == "true")
               or (.prefix == "qwen3-next-80b-a3b-instruct-fp8-tp4" and env.ENABLE_QWEN3_NEXT_80B_A3B_INSTRUCT_FP8_TP4 == "true")
