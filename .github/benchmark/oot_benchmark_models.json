@@ -75,6 +75,18 @@
     "excluded_input_output_pairs": ["1024x8192"]
   },
   {
+    "display": "Qwen3.5-397B-A17B-FP8 TP2",
+    "dashboard_model": "Qwen3.5-397B-A17B-FP8-tp2",
+    "source_path": "Qwen/Qwen3.5-397B-A17B-FP8",
+    "path": "Qwen/Qwen3.5-397B-A17B-FP8",
+    "prefix": "qwen3-5-397b-a17b-fp8-tp2",
+    "extra_args": "--trust-remote-code --tensor-parallel-size 2 --max-num-batched-tokens 16384 --max-model-len 16384",
+    "bench_args": "",
+    "runner": "atom-mi355-8gpu-oot-benchmark",
+    "env_vars": "AITER_QUICK_REDUCE_QUANTIZATION=INT4\nATOM_DISABLE_VLLM_PLUGIN_ATTENTION=1",
+    "excluded_input_output_pairs": ["1024x8192"]
+  },
+  {
     "display": "Qwen3.5-397B-A17B-FP8 TP4",
     "dashboard_model": "Qwen3.5-397B-A17B-FP8-tp4",
     "source_path": "Qwen/Qwen3.5-397B-A17B-FP8",
@@ -93,6 +105,18 @@
     "path": "Qwen/Qwen3.5-397B-A17B",
     "prefix": "qwen3-5-397b-a17b",
     "extra_args": "--trust-remote-code --tensor-parallel-size 8 --max-num-batched-tokens 16384 --max-model-len 16384",
+    "bench_args": "",
+    "runner": "atom-mi355-8gpu-oot-benchmark",
+    "env_vars": "AITER_QUICK_REDUCE_QUANTIZATION=INT4\nATOM_DISABLE_VLLM_PLUGIN_ATTENTION=1",
+    "excluded_input_output_pairs": ["1024x8192"]
+  },
+  {
+    "display": "Qwen3.5-397B-A17B TP2",
+    "dashboard_model": "Qwen3.5-397B-A17B-tp2",
+    "source_path": "Qwen/Qwen3.5-397B-A17B",
+    "path": "Qwen/Qwen3.5-397B-A17B",
+    "prefix": "qwen3-5-397b-a17b-tp2",
+    "extra_args": "--trust-remote-code --tensor-parallel-size 2 --max-num-batched-tokens 16384 --max-model-len 16384",
     "bench_args": "",
     "runner": "atom-mi355-8gpu-oot-benchmark",
     "env_vars": "AITER_QUICK_REDUCE_QUANTIZATION=INT4\nATOM_DISABLE_VLLM_PLUGIN_ATTENTION=1",
