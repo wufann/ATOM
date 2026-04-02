@@ -773,6 +773,7 @@ jobs:
             -e VLLM_COMMIT_USED="${VLLM_COMMIT_USED}" \
             -e VLLM_VERSION_USED="${VLLM_VERSION_USED}" \
             -e OOT_IMAGE_SOURCE="${OOT_IMAGE_SOURCE}" \
+            -e OOT_IMAGE_TAG_USED="${OOT_IMAGE_TAG}" \
             -e PUBLISH_TO_DASHBOARD="${PUBLISH_TO_DASHBOARD}" \
             "$CONTAINER_NAME" python3 - <<'PY'
           import json
@@ -804,6 +805,7 @@ jobs:
           data["vllm_commit"] = os.environ.get("VLLM_COMMIT_USED", "")
           data["vllm_version"] = os.environ.get("VLLM_VERSION_USED", "")
           data["oot_image_source"] = os.environ.get("OOT_IMAGE_SOURCE", "")
+          data["oot_image_tag"] = os.environ.get("OOT_IMAGE_TAG_USED", "")
           data["dashboard_publish_allowed"] = (
               os.environ.get("PUBLISH_TO_DASHBOARD", "false").lower() == "true"
           )
@@ -852,22 +854,37 @@ jobs:
           path: ${{ env.RESULT_FILENAME }}.json
 
       - name: Prepare per-case benchmark dashboard payload
+        id: per_case_dashboard
         if: steps.check.outputs.enabled == 'true' && env.PUBLISH_TO_DASHBOARD == 'true'
         run: |
           rm -rf benchmark-dashboard-input
-          mkdir -p "benchmark-dashboard-input/${RESULT_FILENAME}"
-          cp "${RESULT_FILENAME}.json" "benchmark-dashboard-input/${RESULT_FILENAME}/"
+          mkdir -p benchmark-dashboard-input
+          cp "${RESULT_FILENAME}.json" benchmark-dashboard-input/
 
           python3 .github/scripts/oot_benchmark_to_dashboard.py \
             benchmark-dashboard-input \
             --output benchmark-action-input.json \
             --run-url "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
+          ENTRY_COUNT=$(python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          payload_path = Path("benchmark-action-input.json")
+          if not payload_path.exists():
+              print(0)
+          else:
+              data = json.loads(payload_path.read_text(encoding="utf-8"))
+              print(len(data))
+          PY
+          )
+          echo "entry_count=${ENTRY_COUNT}" >> "$GITHUB_OUTPUT"
+
           echo "=== Generated per-case benchmark dashboard entries ==="
           cat benchmark-action-input.json
 
       - name: Publish per-case benchmark result to dashboard
-        if: steps.check.outputs.enabled == 'true' && env.PUBLISH_TO_DASHBOARD == 'true' && hashFiles('benchmark-action-input.json') != ''
+        if: steps.check.outputs.enabled == 'true' && env.PUBLISH_TO_DASHBOARD == 'true' && steps.per_case_dashboard.outputs.entry_count != '0'
         continue-on-error: true
         uses: benchmark-action/github-action-benchmark@v1
         with:

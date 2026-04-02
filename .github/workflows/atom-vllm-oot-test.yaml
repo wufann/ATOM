@@ -175,7 +175,7 @@ jobs:
   build_oot_image:
     if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && github.event.pull_request.draft == false }}
     needs: [check-signal, download_aiter_wheel]
-    name: Build OOT image
+    name: Reuse OOT CI image
     runs-on: build-only-atom
     outputs:
       should_refresh_ci_latest: ${{ steps.ci_latest_policy.outputs.should_refresh_ci_latest }}
