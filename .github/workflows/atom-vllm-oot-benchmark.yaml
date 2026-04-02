@@ -27,6 +27,10 @@ on:
         description: "Kimi-K2-Thinking-MXFP4 TP8"
         type: boolean
         default: false
+      kimi-k2-5-mxfp4-tp4:
+        description: "Kimi-K2.5-MXFP4 TP4"
+        type: boolean
+        default: false
       kimi-k2-5-mxfp4-tp8:
         description: "Kimi-K2.5-MXFP4 TP8"
         type: boolean
@@ -64,9 +68,9 @@ on:
         type: boolean
         default: false
       oot_image:
-        description: "Prebuilt OOT benchmark image used only for main-branch runs; ignored for non-main branches because a custom image is rebuilt from the selected branch"
+        description: "Optional OOT benchmark image override. Leave empty to use vllm-latest on main or rebuild from the selected non-main branch."
         type: string
-        default: "rocm/atom-dev:vllm-latest"
+        default: ""
       publish_to_dashboard:
         description: "Upload benchmark results to the dashboard"
         type: boolean
@@ -110,19 +114,24 @@ jobs:
 
           ATOM_REPOSITORY="${GITHUB_REPOSITORY}"
           ATOM_REF="${GITHUB_REF_NAME}"
-          PREBUILT_OOT_IMAGE="${INPUT_OOT_IMAGE:-rocm/atom-dev:vllm-latest}"
           OOT_BASE_IMAGE="rocm/atom-dev:latest"
 
           NORMALIZED_REF="${ATOM_REF#refs/heads/}"
           NORMALIZED_REF="${NORMALIZED_REF#refs/tags/}"
 
+          PREBUILT_OOT_IMAGE=""
           REBUILD_OOT_IMAGE=false
-          if [[ "${NORMALIZED_REF}" != "main" ]]; then
-            REBUILD_OOT_IMAGE=true
-          fi
-
           OOT_IMAGE_SOURCE="prebuilt"
-          if [[ "${REBUILD_OOT_IMAGE}" == "true" ]]; then
+          USER_PROVIDED_OOT_IMAGE=false
+          if [[ -n "${INPUT_OOT_IMAGE}" ]]; then
+            PREBUILT_OOT_IMAGE="${INPUT_OOT_IMAGE}"
+            OOT_IMAGE_SOURCE="user-provided"
+            USER_PROVIDED_OOT_IMAGE=true
+          elif [[ "${NORMALIZED_REF}" == "main" ]]; then
+            PREBUILT_OOT_IMAGE="rocm/atom-dev:vllm-latest"
+            OOT_IMAGE_SOURCE="prebuilt"
+          else
+            REBUILD_OOT_IMAGE=true
             OOT_IMAGE_SOURCE="rebuild"
           fi
 
@@ -165,13 +174,19 @@ jobs:
             "${ATOM_REF}" \
             "${OOT_IMAGE_SOURCE}" >> "$GITHUB_STEP_SUMMARY"
 
-          if [[ "${REBUILD_OOT_IMAGE}" == "true" ]]; then
-            printf -- '- Base image: `%s`\n- vLLM version: `%s`\n- vLLM commit: `%s`\n- vLLM source: `.github/workflows/docker-release.yaml`\n- Ignored prebuilt image input: `%s`\n' \
+          if [[ "${USER_PROVIDED_OOT_IMAGE}" == "true" ]]; then
+            printf -- '- User-provided image: `%s`\n- Expected vLLM version: `%s`\n- Expected vLLM commit: `%s`\n' \
+              "${PREBUILT_OOT_IMAGE}" \
+              "${SELECTED_VLLM_VERSION}" \
+              "${SELECTED_VLLM_COMMIT}" >> "$GITHUB_STEP_SUMMARY"
+            printf -- '\nBecause an explicit `oot_image` input was provided, this run uses that image directly and skips branch-based rebuild logic.\n' \
+              >> "$GITHUB_STEP_SUMMARY"
+          elif [[ "${REBUILD_OOT_IMAGE}" == "true" ]]; then
+            printf -- '- Base image: `%s`\n- vLLM version: `%s`\n- vLLM commit: `%s`\n- vLLM source: `.github/workflows/docker-release.yaml`\n' \
               "${OOT_BASE_IMAGE}" \
               "${SELECTED_VLLM_VERSION}" \
-              "${SELECTED_VLLM_COMMIT}" \
-              "${PREBUILT_OOT_IMAGE}" >> "$GITHUB_STEP_SUMMARY"
-            printf -- '\nBecause branch `%s` is not `main`, a custom OOT docker is rebuilt from the selected branch and the prebuilt image input is ignored.\n' \
+              "${SELECTED_VLLM_COMMIT}" >> "$GITHUB_STEP_SUMMARY"
+            printf -- '\nBecause branch `%s` is not `main` and no `oot_image` override was provided, a custom OOT docker is rebuilt from the selected branch.\n' \
               "${ATOM_REF}" >> "$GITHUB_STEP_SUMMARY"
           else
             printf -- '- Prebuilt image: `%s`\n- Expected vLLM version: `%s`\n- Expected vLLM commit: `%s`\n' \
@@ -211,9 +226,9 @@ jobs:
             CONCURRENCY="${PARAMS[2]}"
             RANDOM_RANGE_RATIO="${PARAMS[3]}"
             case "${CONCURRENCY}" in
-              4|8|16|32|64) ;;
+              4|8|16|32|64|128|256) ;;
               *)
-                echo "Unsupported concurrency: ${CONCURRENCY}. Allowed values: 4,8,16,32,64"
+                echo "Unsupported concurrency: ${CONCURRENCY}. Allowed values: 4,8,16,32,64,128,256"
                 exit 1
                 ;;
             esac
@@ -242,6 +257,7 @@ jobs:
           ENABLE_GPT_OSS_120B: ${{ inputs.gpt-oss-120b }}
           ENABLE_KIMI_K2_TP4: ${{ inputs.kimi-k2-thinking-mxfp4-tp4 }}
           ENABLE_KIMI_K2_TP8: ${{ inputs.kimi-k2-thinking-mxfp4-tp8 }}
+          ENABLE_KIMI_K25_TP4: ${{ inputs.kimi-k2-5-mxfp4-tp4 }}
           ENABLE_KIMI_K25_TP8: ${{ inputs.kimi-k2-5-mxfp4-tp8 }}
           ENABLE_QWEN3_5_397B_A17B_TP2: ${{ inputs.qwen3-5-397b-a17b-tp2 }}
           ENABLE_QWEN3_5_397B_A17B_TP4: ${{ inputs.qwen3-5-397b-a17b-tp4 }}
@@ -259,6 +275,7 @@ jobs:
               or (.prefix == "gpt-oss-120b" and env.ENABLE_GPT_OSS_120B == "true")
               or (.prefix == "kimi-k2-thinking-mxfp4-tp4" and env.ENABLE_KIMI_K2_TP4 == "true")
               or (.prefix == "kimi-k2-thinking-mxfp4-tp8" and env.ENABLE_KIMI_K2_TP8 == "true")
+              or (.prefix == "kimi-k25-mxfp4-tp4" and env.ENABLE_KIMI_K25_TP4 == "true")
               or (.prefix == "kimi-k25-mxfp4-tp8" and env.ENABLE_KIMI_K25_TP8 == "true")
               or (.prefix == "qwen3-5-397b-a17b-tp2" and env.ENABLE_QWEN3_5_397B_A17B_TP2 == "true")
               or (.prefix == "qwen3-5-397b-a17b-tp4" and env.ENABLE_QWEN3_5_397B_A17B_TP4 == "true")
@@ -308,8 +325,30 @@ jobs:
           for model in models:
               supported_pairs = set(model.get("supported_input_output_pairs", []))
               excluded_pairs = set(model.get("excluded_input_output_pairs", []))
+              model_params = []
+              seen = set()
+              extra_concurrency = (128, 256) if str(model.get("prefix", "")).startswith("qwen3-5-") else ()
 
               for param in params:
+                  variants = [param]
+                  for concurrency in extra_concurrency:
+                      variant = dict(param)
+                      variant["concurrency"] = concurrency
+                      variants.append(variant)
+
+                  for variant in variants:
+                      key = (
+                          int(variant["input_length"]),
+                          int(variant["output_length"]),
+                          int(variant["concurrency"]),
+                          str(variant["random_range_ratio"]),
+                      )
+                      if key in seen:
+                          continue
+                      seen.add(key)
+                      model_params.append(variant)
+
+              for param in model_params:
                   pair = f'{param["input_length"]}x{param["output_length"]}'
                   if supported_pairs and pair not in supported_pairs:
                       continue
@@ -449,6 +488,9 @@ jobs:
       matrix: ${{ fromJson(needs.build-benchmark-matrix.outputs.benchmark_matrix) }}
     runs-on: ${{ matrix.model.runner }}
     timeout-minutes: 240
+    permissions:
+      actions: read
+      contents: write
     env:
       MODEL_NAME: ${{ matrix.model.display }}
       DASHBOARD_MODEL_NAME: ${{ matrix.model.dashboard_model || '' }}
@@ -483,6 +525,8 @@ jobs:
             gpt-oss-120b) echo "enabled=${{ inputs.gpt-oss-120b }}" >> "$GITHUB_OUTPUT" ;;
             kimi-k2-thinking-mxfp4-tp4) echo "enabled=${{ inputs.kimi-k2-thinking-mxfp4-tp4 }}" >> "$GITHUB_OUTPUT" ;;
             kimi-k2-thinking-mxfp4-tp8) echo "enabled=${{ inputs.kimi-k2-thinking-mxfp4-tp8 }}" >> "$GITHUB_OUTPUT" ;;
+            kimi-k25-mxfp4-tp4) echo "enabled=${{ inputs.kimi-k2-5-mxfp4-tp4 }}" >> "$GITHUB_OUTPUT" ;;
+            kimi-k25-mxfp4-tp8) echo "enabled=${{ inputs.kimi-k2-5-mxfp4-tp8 }}" >> "$GITHUB_OUTPUT" ;;
             qwen3-5-397b-a17b-tp2) echo "enabled=${{ inputs.qwen3-5-397b-a17b-tp2 }}" >> "$GITHUB_OUTPUT" ;;
             qwen3-5-397b-a17b-tp4) echo "enabled=${{ inputs.qwen3-5-397b-a17b-tp4 }}" >> "$GITHUB_OUTPUT" ;;
             qwen3-5-397b-a17b) echo "enabled=${{ inputs.qwen3-5-397b-a17b }}" >> "$GITHUB_OUTPUT" ;;
@@ -807,6 +851,37 @@ jobs:
           name: oot-benchmark-${{ env.RESULT_FILENAME }}
           path: ${{ env.RESULT_FILENAME }}.json
 
+      - name: Prepare per-case benchmark dashboard payload
+        if: steps.check.outputs.enabled == 'true' && env.PUBLISH_TO_DASHBOARD == 'true'
+        run: |
+          rm -rf benchmark-dashboard-input
+          mkdir -p "benchmark-dashboard-input/${RESULT_FILENAME}"
+          cp "${RESULT_FILENAME}.json" "benchmark-dashboard-input/${RESULT_FILENAME}/"
+
+          python3 .github/scripts/oot_benchmark_to_dashboard.py \
+            benchmark-dashboard-input \
+            --output benchmark-action-input.json \
+            --run-url "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+          echo "=== Generated per-case benchmark dashboard entries ==="
+          cat benchmark-action-input.json
+
+      - name: Publish per-case benchmark result to dashboard
+        if: steps.check.outputs.enabled == 'true' && env.PUBLISH_TO_DASHBOARD == 'true' && hashFiles('benchmark-action-input.json') != ''
+        continue-on-error: true
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          tool: customBiggerIsBetter
+          output-file-path: benchmark-action-input.json
+          gh-pages-branch: gh-pages
+          benchmark-data-dir-path: benchmark-dashboard
+          auto-push: true
+          alert-threshold: "80%"
+          comment-on-alert: false
+          fail-on-alert: false
+          max-items-in-chart: 90
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Clean up OOT benchmark container
         if: always() && steps.check.outputs.enabled == 'true'
         run: |
@@ -851,7 +926,7 @@ jobs:
       - name: Note summary behavior
         run: |
           if [[ "${{ needs.resolve-atom-source.outputs.publish_to_dashboard }}" == "true" ]]; then
-            printf '### Summary mode\nResults from `%s@%s` using `%s` OOT image mode are shown below as a workflow summary table. Because dashboard upload is enabled for this run, successful cases will also be used for regression comparison and dashboard upload.\n' \
+            printf '### Summary mode\nResults from `%s@%s` using `%s` OOT image mode are shown below as a workflow summary table. Because dashboard upload is enabled for this run, each successful benchmark case is published to the dashboard as soon as it finishes, and the final summary job also reconciles the completed run for regression comparison.\n' \
               "${{ needs.resolve-atom-source.outputs.atom_repository }}" \
               "${{ needs.resolve-atom-source.outputs.atom_ref }}" \
               "${{ needs.resolve-atom-source.outputs.oot_image_source }}" >> "$GITHUB_STEP_SUMMARY"
