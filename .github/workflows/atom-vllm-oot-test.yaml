@@ -181,9 +181,12 @@ jobs:
       should_refresh_ci_latest: ${{ steps.ci_latest_policy.outputs.should_refresh_ci_latest }}
     env:
       VLLM_COMMIT: b31e9326a7d9394aab8c767f8ebe225c65594b60
-      OOT_IMAGE_TAG: rocm/atom-dev:oot-pre-build-${{ env.GITHUB_COMMIT_SHA }}
       AITER_ARTIFACT_ID: ${{ needs.download_aiter_wheel.outputs.aiter_artifact_id }}
     steps:
+      - name: Initialize OOT image tag
+        run: |
+          echo "OOT_IMAGE_TAG=rocm/atom-dev:oot-pre-build-${GITHUB_COMMIT_SHA}" >> "$GITHUB_ENV"
+
       - name: Checkout ATOM repo
         if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork }}
         uses: actions/checkout@v6
@@ -542,7 +545,7 @@ jobs:
           if [ "${IS_FORK_PR}" = "true" ]; then
             echo "OOT_IMAGE_TAG=atom_oot:ci" >> "$GITHUB_ENV"
           else
-            echo "OOT_IMAGE_TAG=rocm/atom-dev:oot-pre-build-${{ env.GITHUB_COMMIT_SHA }}" >> "$GITHUB_ENV"
+            echo "OOT_IMAGE_TAG=rocm/atom-dev:oot-pre-build-${GITHUB_COMMIT_SHA}" >> "$GITHUB_ENV"
           fi
 
       - name: Pull OOT image
@@ -733,7 +736,7 @@ jobs:
 
       - name: Promote commit image to OOT CI latest
         run: |
-          COMMIT_TAG="rocm/atom-dev:oot-pre-build-${{ env.GITHUB_COMMIT_SHA }}"
+          COMMIT_TAG="rocm/atom-dev:oot-pre-build-${GITHUB_COMMIT_SHA}"
           docker pull "${COMMIT_TAG}"
           docker tag "${COMMIT_TAG}" "${OOT_CI_PREBUILT_LATEST_IMAGE_TAG}"
           docker push "${OOT_CI_PREBUILT_LATEST_IMAGE_TAG}"
@@ -741,7 +744,7 @@ jobs:
       - name: Clean up promoted images
         if: always()
         run: |
-          docker rmi "rocm/atom-dev:oot-pre-build-${{ env.GITHUB_COMMIT_SHA }}" || true
+          docker rmi "rocm/atom-dev:oot-pre-build-${GITHUB_COMMIT_SHA}" || true
           docker rmi "${OOT_CI_PREBUILT_LATEST_IMAGE_TAG}" || true
 
   # ---------- OOT full validation path (schedule / workflow_dispatch) ----------
