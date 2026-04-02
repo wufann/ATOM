@@ -15,6 +15,8 @@ ARG INSTALL_FASTSAFETENSORS=1
 ARG ROCM_WHEEL_INDEX="https://repo.radeon.com/rocm/manylinux/rocm-rel-7.2.1/"
 ARG ROCM_TORCHVISION_VERSION="0.24.0+rocm7.2.1.gitb919bd0c"
 ARG ROCM_TORCHAUDIO_VERSION="2.9.0+rocm7.2.1.gite3c6ee2b"
+# Let PR OOT CI verify whether a pulled prebuilt image still matches this vLLM commit
+LABEL com.rocm.atom.vllm_commit="${VLLM_COMMIT}"
 
 ENV PATH="/opt/venv/bin:${PATH}"
 ENV MAX_JOBS=${MAX_JOBS}

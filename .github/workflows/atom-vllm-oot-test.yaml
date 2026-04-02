@@ -78,6 +78,7 @@ env:
   GITHUB_REPO_URL: ${{ github.event.pull_request.head.repo.clone_url || 'https://github.com/ROCm/ATOM.git' }}
   GITHUB_COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.event.head_commit.id || github.sha }}
   NIGHTLY_OOT_IMAGE_TAG: rocm/atom-dev:vllm-latest
+  OOT_CI_PREBUILT_LATEST_IMAGE_TAG: rocm/atom-dev:oot-vLLM-CI-pre-build-latest
   VALIDATION_IMAGE_REPO: rocm/atom-dev
   GPU_ARCH: "gfx942;gfx950"
   AITER_REPO: "https://github.com/ROCm/aiter.git"
@@ -103,13 +104,78 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_SHA: ${{ github.sha }}
 
-  build_oot_image:
+  download_aiter_wheel:
     if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && github.event.pull_request.draft == false }}
     needs: [check-signal]
+    name: Download aiter wheel
+    runs-on: ubuntu-latest
+    steps:
+      - name: Find and download latest aiter wheel
+        run: |
+          set -euo pipefail
+          echo "=== Finding latest aiter-whl-main artifact from ROCm/aiter ==="
+
+          API_URL="https://api.github.com"
+          AUTH_HEADER="Authorization: token ${{ secrets.GITHUB_TOKEN }}"
+          AITER_TEST_WORKFLOW_ID=179476100
+
+          RUNS=$(curl -s -H "$AUTH_HEADER" \
+            "$API_URL/repos/ROCm/aiter/actions/workflows/$AITER_TEST_WORKFLOW_ID/runs?per_page=100&branch=main&event=push")
+
+          ARTIFACT_ID=""
+          ARTIFACT_NAME=""
+          for RUN_ID in $(echo "$RUNS" | jq -r '.workflow_runs[].id'); do
+            ARTIFACT_JSON=$(curl -s -H "$AUTH_HEADER" \
+              "$API_URL/repos/ROCm/aiter/actions/runs/$RUN_ID/artifacts" \
+              | jq '[.artifacts[] | select(.name | startswith("aiter-whl-main")) | select(.expired == false)] | first')
+
+            if [ "$ARTIFACT_JSON" != "null" ] && [ -n "$ARTIFACT_JSON" ]; then
+              ARTIFACT_ID=$(echo "$ARTIFACT_JSON" | jq -r '.id')
+              ARTIFACT_NAME=$(echo "$ARTIFACT_JSON" | jq -r '.name')
+              echo "Found artifact in run $RUN_ID: $ARTIFACT_NAME (ID: $ARTIFACT_ID)"
+              break
+            fi
+          done
+
+          if [ -z "$ARTIFACT_ID" ] || [ "$ARTIFACT_ID" = "null" ]; then
+            echo "ERROR: No aiter-whl-main artifact found in recent Aiter Test runs"
+            exit 1
+          fi
+
+          echo "=== Downloading artifact ==="
+          mkdir -p aiter-whl
+          curl -s -L -H "$AUTH_HEADER" \
+            "$API_URL/repos/ROCm/aiter/actions/artifacts/$ARTIFACT_ID/zip" \
+            -o aiter-whl.zip
+          unzip -o aiter-whl.zip -d aiter-whl
+          rm -f aiter-whl.zip
+
+          AITER_WHL=$(ls -t aiter-whl/amd_aiter*.whl 2>/dev/null | head -1)
+          if [ -z "$AITER_WHL" ]; then
+            echo "ERROR: No amd_aiter wheel found in artifact"
+            ls -la aiter-whl/
+            exit 1
+          fi
+
+          echo "Downloaded wheel: $AITER_WHL"
+
+      - name: Upload aiter wheel
+        uses: actions/upload-artifact@v4
+        with:
+          name: aiter-whl
+          path: aiter-whl/amd_aiter*.whl
+          retention-days: 1
+
+  build_oot_image:
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && github.event.pull_request.draft == false }}
+    needs: [check-signal, download_aiter_wheel]
     name: Build OOT image
     runs-on: build-only-atom
+    outputs:
+      should_refresh_ci_latest: ${{ steps.ci_latest_policy.outputs.should_refresh_ci_latest }}
     env:
       VLLM_COMMIT: b31e9326a7d9394aab8c767f8ebe225c65594b60
+      OOT_IMAGE_TAG: rocm/atom-dev:oot-pre-build-${{ env.GITHUB_COMMIT_SHA }}
     steps:
       - name: Checkout ATOM repo
         if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork }}
@@ -124,57 +190,121 @@ jobs:
         id: existing_oot_image
         if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork }}
         run: |
-          IMAGE_TAG=rocm/atom-dev:oot-pre-build-${{ env.GITHUB_COMMIT_SHA }}
-          if docker manifest inspect "${IMAGE_TAG}" >/dev/null 2>&1; then
-            echo "image_exists=true" >> "$GITHUB_OUTPUT"
-            echo "Reusing existing OOT image for ${IMAGE_TAG}"
-          else
-            echo "image_exists=false" >> "$GITHUB_OUTPUT"
-            echo "No existing OOT image found for ${IMAGE_TAG}; building a new one."
+          set -euo pipefail
+          echo "image_exists=false" >> "$GITHUB_OUTPUT"
+
+          if ! docker manifest inspect "${OOT_IMAGE_TAG}" >/dev/null 2>&1; then
+            echo "No existing OOT image found for ${OOT_IMAGE_TAG}; building a new one."
+            exit 0
           fi
 
-      - name: Generate OOT base Dockerfile
+          echo "Found existing OOT image for ${OOT_IMAGE_TAG}; validating vLLM commit label."
+          if ! docker pull "${OOT_IMAGE_TAG}"; then
+            echo "Failed to pull existing image ${OOT_IMAGE_TAG}; rebuilding it."
+            exit 0
+          fi
+
+          EXISTING_VLLM_COMMIT="$(docker inspect --format '{{ index .Config.Labels "com.rocm.atom.vllm_commit" }}' "${OOT_IMAGE_TAG}" 2>/dev/null || true)"
+          if [ -n "${EXISTING_VLLM_COMMIT}" ] && [ "${EXISTING_VLLM_COMMIT}" = "${VLLM_COMMIT}" ]; then
+            echo "image_exists=true" >> "$GITHUB_OUTPUT"
+            echo "Reusing existing OOT image for ${OOT_IMAGE_TAG} (vLLM commit ${EXISTING_VLLM_COMMIT})."
+          else
+            echo "Existing image label mismatch or missing. Expected ${VLLM_COMMIT}, got ${EXISTING_VLLM_COMMIT:-<missing>}."
+          fi
+
+      - name: Download aiter wheel
+        if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork) && steps.existing_oot_image.outputs.image_exists != 'true' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: aiter-whl
+          path: aiter-whl
+
+      - name: Generate OOT overlay Dockerfile
         if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork) && steps.existing_oot_image.outputs.image_exists != 'true' }}
         run: |
-          cat <<EOF > Dockerfile.mod
-          FROM ${{ env.ATOM_BASE_NIGHTLY_IMAGE }}
-          RUN pip install -U lm-eval[api]
+          cat <<'EOF' > Dockerfile.mod
+          ARG OOT_BASE_IMAGE
+          FROM ${OOT_BASE_IMAGE}
+          ARG GITHUB_REPO_URL
+          ARG GITHUB_COMMIT_SHA
+          ARG VLLM_COMMIT
+          ARG INSTALL_LM_EVAL=1
+          LABEL com.rocm.atom.vllm_commit="${VLLM_COMMIT}"
+          COPY aiter-whl/ /tmp/aiter-whl/
+          RUN if [ "${INSTALL_LM_EVAL}" = "1" ]; then pip install -U "lm-eval[api]"; else echo "Skip lm-eval install"; fi
           RUN pip show lm-eval || true
           RUN pip install hf_transfer
           RUN pip show hf_transfer || true
-          RUN echo "=== Aiter version BEFORE uninstall ===" && pip show amd-aiter || true
-          RUN pip uninstall -y amd-aiter
           RUN pip install --upgrade "pybind11>=3.0.1"
           RUN pip show pybind11
-          RUN rm -rf /app/aiter-test
-          RUN git clone --depth 1 https://github.com/ROCm/aiter.git /app/aiter-test && \\
-              cd /app/aiter-test && \\
-              git checkout HEAD && \\
-              git submodule sync && git submodule update --init --recursive && \\
-              MAX_JOBS=64 PREBUILD_KERNELS=0 GPU_ARCHS=gfx950 python3 setup.py develop
-          RUN echo "=== Aiter version AFTER installation ===" && pip show amd-aiter || true
-          RUN echo "=== ATOM version BEFORE uninstall ===" && pip show atom || true
-          RUN pip uninstall -y atom
-          RUN rm -rf /app/ATOM
-          RUN git clone ${{ env.GITHUB_REPO_URL }} /app/ATOM && \\
-              cd /app/ATOM && \\
-              git checkout ${{ env.GITHUB_COMMIT_SHA }} && \\
-              pip install -e .
-          RUN echo "=== ATOM version AFTER installation ===" && pip show atom || true
+          RUN echo "=== Aiter version BEFORE uninstall ===" && pip show amd-aiter || true && \
+              pip uninstall -y amd-aiter || true && \
+              rm -rf /app/aiter-test && \
+              AITER_WHL="$(ls -t /tmp/aiter-whl/amd_aiter*.whl 2>/dev/null | head -1)" && \
+              if [ -z "${AITER_WHL}" ]; then echo "ERROR: No amd_aiter wheel found under /tmp/aiter-whl"; ls -la /tmp/aiter-whl || true; exit 1; fi && \
+              pip install "${AITER_WHL}" && \
+              echo "=== Aiter version AFTER installation ===" && pip show amd-aiter || true && \
+              rm -rf /tmp/aiter-whl
+          RUN echo "=== ATOM version BEFORE uninstall ===" && pip show atom || true && \
+              pip uninstall -y atom || true && \
+              rm -rf /app/ATOM && \
+              git clone "${GITHUB_REPO_URL}" /app/ATOM && \
+              cd /app/ATOM && \
+              git checkout "${GITHUB_COMMIT_SHA}" && \
+              pip install -e . && \
+              echo "=== ATOM version AFTER installation ===" && pip show atom || true
+          RUN pip show amd-aiter atom vllm torch triton mori || true
           EOF
 
-      - name: Build OOT base image
+      - name: Resolve OOT CI build mode
+        id: build_mode
         if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork) && steps.existing_oot_image.outputs.image_exists != 'true' }}
         run: |
-          docker build --pull --network=host \
+          set -euo pipefail
+          echo "build_mode=full" >> "$GITHUB_OUTPUT"
+
+          if ! docker pull "${OOT_CI_PREBUILT_LATEST_IMAGE_TAG}" >/dev/null 2>&1; then
+            echo "Unable to pull ${OOT_CI_PREBUILT_LATEST_IMAGE_TAG}; falling back to a full vLLM rebuild."
+            exit 0
+          fi
+
+          LATEST_VLLM_COMMIT="$(docker inspect --format '{{ index .Config.Labels "com.rocm.atom.vllm_commit" }}' "${OOT_CI_PREBUILT_LATEST_IMAGE_TAG}" 2>/dev/null || true)"
+          if [ -n "${LATEST_VLLM_COMMIT}" ] && [ "${LATEST_VLLM_COMMIT}" = "${VLLM_COMMIT}" ]; then
+            echo "build_mode=fast" >> "$GITHUB_OUTPUT"
+            echo "Reusing ${OOT_CI_PREBUILT_LATEST_IMAGE_TAG} as the OOT CI base (vLLM commit ${LATEST_VLLM_COMMIT})."
+          else
+            echo "OOT CI latest image label mismatch or missing. Expected ${VLLM_COMMIT}, got ${LATEST_VLLM_COMMIT:-<missing>}; rebuilding vLLM."
+          fi
+
+      - name: Build OOT overlay image from reusable latest
+        if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork) && steps.existing_oot_image.outputs.image_exists != 'true' && steps.build_mode.outputs.build_mode == 'fast' }}
+        run: |
+          DOCKER_BUILDKIT=1 docker build --network=host \
+            -t atom_oot:ci \
+            --build-arg OOT_BASE_IMAGE="${OOT_CI_PREBUILT_LATEST_IMAGE_TAG}" \
+            --build-arg GITHUB_REPO_URL="${GITHUB_REPO_URL}" \
+            --build-arg GITHUB_COMMIT_SHA="${GITHUB_COMMIT_SHA}" \
+            --build-arg VLLM_COMMIT="${VLLM_COMMIT}" \
+            --build-arg INSTALL_LM_EVAL=1 \
+            -f Dockerfile.mod .
+
+      - name: Build OOT overlay base image
+        if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork) && steps.existing_oot_image.outputs.image_exists != 'true' && steps.build_mode.outputs.build_mode != 'fast' }}
+        run: |
+          DOCKER_BUILDKIT=1 docker build --pull --network=host \
             --no-cache \
             -t atom_oot_base:ci \
+            --build-arg OOT_BASE_IMAGE="${ATOM_BASE_NIGHTLY_IMAGE}" \
+            --build-arg GITHUB_REPO_URL="${GITHUB_REPO_URL}" \
+            --build-arg GITHUB_COMMIT_SHA="${GITHUB_COMMIT_SHA}" \
+            --build-arg VLLM_COMMIT="${VLLM_COMMIT}" \
+            --build-arg INSTALL_LM_EVAL=1 \
             -f Dockerfile.mod .
 
       - name: Build OOT vLLM image
-        if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork) && steps.existing_oot_image.outputs.image_exists != 'true' }}
+        if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork) && steps.existing_oot_image.outputs.image_exists != 'true' && steps.build_mode.outputs.build_mode != 'fast' }}
         run: |
-          docker build --network=host \
+          DOCKER_BUILDKIT=1 docker build --network=host \
             --no-cache \
             -t atom_oot:ci \
             --target atom_oot \
@@ -185,22 +315,42 @@ jobs:
             --build-arg INSTALL_FASTSAFETENSORS=1 \
             -f docker/Dockerfile .
 
+      - name: Decide whether to refresh OOT CI latest
+        id: ci_latest_policy
+        if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork }}
+        env:
+          EXISTING_IMAGE: ${{ steps.existing_oot_image.outputs.image_exists }}
+          BUILD_MODE: ${{ steps.build_mode.outputs.build_mode }}
+        run: |
+          SHOULD_REFRESH=false
+          if [ "${EXISTING_IMAGE}" != "true" ] && [ "${BUILD_MODE}" != "fast" ]; then
+            SHOULD_REFRESH=true
+          fi
+          echo "should_refresh_ci_latest=${SHOULD_REFRESH}" >> "$GITHUB_OUTPUT"
+          echo "OOT CI latest refresh required: ${SHOULD_REFRESH}"
+
       - name: Push Docker image
         if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork) && steps.existing_oot_image.outputs.image_exists != 'true' }}
         run: |
-          IMAGE_TAG=rocm/atom-dev:oot-pre-build-${{ env.GITHUB_COMMIT_SHA }}
-          docker tag atom_oot:ci $IMAGE_TAG
-          docker push $IMAGE_TAG
+          docker tag atom_oot:ci "${OOT_IMAGE_TAG}"
+          docker push "${OOT_IMAGE_TAG}"
+
+      - name: Skip remote build for fork PR
+        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork }}
+        run: |
+          echo "Fork PRs build the OOT image locally on each test runner."
 
       - name: Clean up build images
         if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork) && always() }}
         run: |
+          rm -f Dockerfile.mod || true
           docker rmi "atom_oot_base:ci" || true
           docker rmi "atom_oot:ci" || true
-          docker rmi "rocm/atom-dev:oot-pre-build-${{ env.GITHUB_COMMIT_SHA }}" || true
+          docker rmi "${OOT_IMAGE_TAG}" || true
+          docker rmi "${OOT_CI_PREBUILT_LATEST_IMAGE_TAG}" || true
 
   atom-vllm-oot:
-    needs: [check-signal, build_oot_image]
+    needs: [check-signal, download_aiter_wheel, build_oot_image]
     if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && github.event.pull_request.draft == false }}
     name: OOT CI / ${{ matrix.check_name }}
     strategy:
@@ -269,48 +419,93 @@ jobs:
         run: |
           echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
 
-      - name: Generate OOT Dockerfile for forked repo
+      - name: Download aiter wheel
+        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork }}
+        uses: actions/download-artifact@v4
+        with:
+          name: aiter-whl
+          path: aiter-whl
+
+      - name: Generate OOT overlay Dockerfile for forked repo
         if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork }}
         run: |
-          cat <<EOF > Dockerfile.mod
-          FROM ${{ env.ATOM_BASE_NIGHTLY_IMAGE }}
-          RUN pip install -U lm-eval[api]
+          cat <<'EOF' > Dockerfile.mod
+          ARG OOT_BASE_IMAGE
+          FROM ${OOT_BASE_IMAGE}
+          ARG GITHUB_REPO_URL
+          ARG GITHUB_COMMIT_SHA
+          ARG VLLM_COMMIT
+          ARG INSTALL_LM_EVAL=1
+          LABEL com.rocm.atom.vllm_commit="${VLLM_COMMIT}"
+          COPY aiter-whl/ /tmp/aiter-whl/
+          RUN if [ "${INSTALL_LM_EVAL}" = "1" ]; then pip install -U "lm-eval[api]"; else echo "Skip lm-eval install"; fi
           RUN pip show lm-eval || true
           RUN pip install hf_transfer
           RUN pip show hf_transfer || true
-          RUN echo "=== Aiter version BEFORE uninstall ===" && pip show amd-aiter || true
-          RUN pip uninstall -y amd-aiter
           RUN pip install --upgrade "pybind11>=3.0.1"
           RUN pip show pybind11
-          RUN rm -rf /app/aiter-test
-          RUN git clone --depth 1 https://github.com/ROCm/aiter.git /app/aiter-test && \\
-              cd /app/aiter-test && \\
-              git checkout HEAD && \\
-              git submodule sync && git submodule update --init --recursive && \\
-              MAX_JOBS=64 PREBUILD_KERNELS=0 GPU_ARCHS=gfx950 python3 setup.py develop
-          RUN echo "=== Aiter version AFTER installation ===" && pip show amd-aiter || true
-          RUN echo "=== ATOM version BEFORE uninstall ===" && pip show atom || true
-          RUN pip uninstall -y atom
-          RUN rm -rf /app/ATOM
-          RUN git clone ${{ env.GITHUB_REPO_URL }} /app/ATOM && \\
-              cd /app/ATOM && \\
-              git checkout ${{ env.GITHUB_COMMIT_SHA }} && \\
-              pip install -e .
-          RUN echo "=== ATOM version AFTER installation ===" && pip show atom || true
+          RUN echo "=== Aiter version BEFORE uninstall ===" && pip show amd-aiter || true && \
+              pip uninstall -y amd-aiter || true && \
+              rm -rf /app/aiter-test && \
+              AITER_WHL="$(ls -t /tmp/aiter-whl/amd_aiter*.whl 2>/dev/null | head -1)" && \
+              if [ -z "${AITER_WHL}" ]; then echo "ERROR: No amd_aiter wheel found under /tmp/aiter-whl"; ls -la /tmp/aiter-whl || true; exit 1; fi && \
+              pip install "${AITER_WHL}" && \
+              echo "=== Aiter version AFTER installation ===" && pip show amd-aiter || true && \
+              rm -rf /tmp/aiter-whl
+          RUN echo "=== ATOM version BEFORE uninstall ===" && pip show atom || true && \
+              pip uninstall -y atom || true && \
+              rm -rf /app/ATOM && \
+              git clone "${GITHUB_REPO_URL}" /app/ATOM && \
+              cd /app/ATOM && \
+              git checkout "${GITHUB_COMMIT_SHA}" && \
+              pip install -e . && \
+              echo "=== ATOM version AFTER installation ===" && pip show atom || true
+          RUN pip show amd-aiter atom vllm torch triton mori || true
           EOF
 
-      - name: Build OOT base image for forked repo
+      - name: Build OOT image for forked repo
         if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork }}
         run: |
-          docker build --pull --network=host \
+          set -euo pipefail
+          docker rmi "atom_oot_base:ci" || true
+          docker rmi "atom_oot:ci" || true
+
+          BUILD_MODE="full"
+          if docker pull "${OOT_CI_PREBUILT_LATEST_IMAGE_TAG}" >/dev/null 2>&1; then
+            LATEST_VLLM_COMMIT="$(docker inspect --format '{{ index .Config.Labels "com.rocm.atom.vllm_commit" }}' "${OOT_CI_PREBUILT_LATEST_IMAGE_TAG}" 2>/dev/null || true)"
+            if [ -n "${LATEST_VLLM_COMMIT}" ] && [ "${LATEST_VLLM_COMMIT}" = "${VLLM_COMMIT}" ]; then
+              BUILD_MODE="fast"
+              echo "Reusing ${OOT_CI_PREBUILT_LATEST_IMAGE_TAG} locally for fork PR OOT CI."
+            else
+              echo "OOT CI latest image label mismatch or missing. Expected ${VLLM_COMMIT}, got ${LATEST_VLLM_COMMIT:-<missing>}; rebuilding vLLM locally."
+            fi
+          else
+            echo "Unable to pull ${OOT_CI_PREBUILT_LATEST_IMAGE_TAG}; rebuilding vLLM locally."
+          fi
+
+          if [ "${BUILD_MODE}" = "fast" ]; then
+            DOCKER_BUILDKIT=1 docker build --network=host \
+              -t atom_oot:ci \
+              --build-arg OOT_BASE_IMAGE="${OOT_CI_PREBUILT_LATEST_IMAGE_TAG}" \
+              --build-arg GITHUB_REPO_URL="${GITHUB_REPO_URL}" \
+              --build-arg GITHUB_COMMIT_SHA="${GITHUB_COMMIT_SHA}" \
+              --build-arg VLLM_COMMIT="${VLLM_COMMIT}" \
+              --build-arg INSTALL_LM_EVAL=1 \
+              -f Dockerfile.mod .
+            exit 0
+          fi
+
+          DOCKER_BUILDKIT=1 docker build --pull --network=host \
             --no-cache \
             -t atom_oot_base:ci \
+            --build-arg OOT_BASE_IMAGE="${ATOM_BASE_NIGHTLY_IMAGE}" \
+            --build-arg GITHUB_REPO_URL="${GITHUB_REPO_URL}" \
+            --build-arg GITHUB_COMMIT_SHA="${GITHUB_COMMIT_SHA}" \
+            --build-arg VLLM_COMMIT="${VLLM_COMMIT}" \
+            --build-arg INSTALL_LM_EVAL=1 \
             -f Dockerfile.mod .
 
-      - name: Build OOT vLLM image for forked repo
-        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork }}
-        run: |
-          docker build --network=host \
+          DOCKER_BUILDKIT=1 docker build --network=host \
             --no-cache \
             -t atom_oot:ci \
             --target atom_oot \
@@ -330,6 +525,11 @@ jobs:
           else
             echo "OOT_IMAGE_TAG=rocm/atom-dev:oot-pre-build-${{ env.GITHUB_COMMIT_SHA }}" >> "$GITHUB_ENV"
           fi
+
+      - name: Pull OOT image
+        if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork }}
+        run: |
+          docker pull "${OOT_IMAGE_TAG}"
 
       - name: Prepare model cache mount
         run: |
@@ -476,6 +676,10 @@ jobs:
           docker exec "$CONTAINER_NAME" bash -lc "if [ -f /tmp/vllm_oot.pid ]; then kill \$(cat /tmp/vllm_oot.pid) || true; fi" || true
           docker stop "$CONTAINER_NAME" || true
           docker rm "$CONTAINER_NAME" || true
+          rm -f Dockerfile.mod || true
+          docker rmi "atom_oot_base:ci" || true
+          docker rmi "atom_oot:ci" || true
+          docker rmi "${OOT_CI_PREBUILT_LATEST_IMAGE_TAG}" || true
           KEEP_COUNT="${OOT_IMAGE_CACHE_KEEP:-3}"
           if [[ "${OOT_IMAGE_TAG}" == rocm/atom-dev:oot-pre-build-* ]]; then
             echo "Keeping current OOT image tag and the ${KEEP_COUNT} most recent oot-pre-build tags."
@@ -497,6 +701,29 @@ jobs:
               docker rmi "${tag}" || true
             done
           fi
+
+  promote-oot-ci-latest:
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && github.event.pull_request.draft == false && !github.event.pull_request.head.repo.fork && needs.atom-vllm-oot.result == 'success' && needs.build_oot_image.outputs.should_refresh_ci_latest == 'true' }}
+    name: Promote OOT CI latest image
+    needs: [build_oot_image, atom-vllm-oot]
+    runs-on: build-only-atom
+    steps:
+      - name: Docker Login
+        run: |
+          echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
+
+      - name: Promote commit image to OOT CI latest
+        run: |
+          COMMIT_TAG="rocm/atom-dev:oot-pre-build-${{ env.GITHUB_COMMIT_SHA }}"
+          docker pull "${COMMIT_TAG}"
+          docker tag "${COMMIT_TAG}" "${OOT_CI_PREBUILT_LATEST_IMAGE_TAG}"
+          docker push "${OOT_CI_PREBUILT_LATEST_IMAGE_TAG}"
+
+      - name: Clean up promoted images
+        if: always()
+        run: |
+          docker rmi "rocm/atom-dev:oot-pre-build-${{ env.GITHUB_COMMIT_SHA }}" || true
+          docker rmi "${OOT_CI_PREBUILT_LATEST_IMAGE_TAG}" || true
 
   # ---------- OOT full validation path (schedule / workflow_dispatch) ----------
   prepare-oot-image:
