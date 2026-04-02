@@ -148,9 +148,9 @@ vllm bench serve \
   --model <model> \
   --dataset-name random \
   --random-input-len <isl> \
-  --random-output-len <osl> \
+  --random-output-len 20 \
   --max-concurrency <conc> \
-  --num-prompts <conc_x10> \
+  --num-prompts <conc_x2> \
   --num-warmups <conc_x2> \
   --request-rate inf \
   --profile \
