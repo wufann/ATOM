@@ -602,10 +602,14 @@ jobs:
         run: |
           model_dir="/models/${{ matrix.model_path }}"
           if [ -n "${MODEL_CACHE_MOUNT}" ]; then
-            echo "/models directory found, downloading model to ${model_dir}"
-            if ! docker exec -e HF_TOKEN="${HF_TOKEN:-}" "$CONTAINER_NAME" bash -lc "hf download ${{ matrix.model_path }} --local-dir \"$model_dir\""; then
-              echo "Model download failed for '${{ matrix.model_path }}'. Aborting."
-              exit 1
+            if docker exec "$CONTAINER_NAME" bash -lc "[ -d \"$model_dir\" ] && [ -f \"$model_dir/config.json\" ]"; then
+              echo "Model already exists under ${model_dir}; skip download"
+            else
+              echo "Model not found under ${model_dir}; downloading model"
+              if ! docker exec -e HF_TOKEN="${HF_TOKEN:-}" "$CONTAINER_NAME" bash -lc "hf download ${{ matrix.model_path }} --local-dir \"$model_dir\""; then
+                echo "Model download failed for '${{ matrix.model_path }}'. Aborting."
+                exit 1
+              fi
             fi
           else
             echo "/models directory not mounted; skipping model download"
@@ -1069,10 +1073,14 @@ jobs:
         run: |
           model_dir="/models/${{ matrix.model_path }}"
           if [ -n "${MODEL_CACHE_MOUNT}" ]; then
-            echo "/models directory found, downloading model to ${model_dir}"
-            if ! docker exec -e HF_TOKEN="${HF_TOKEN:-}" "$CONTAINER_NAME" bash -lc "hf download ${{ matrix.model_path }} --local-dir \"$model_dir\""; then
-              echo "Model download failed for '${{ matrix.model_path }}'. Aborting."
-              exit 1
+            if docker exec "$CONTAINER_NAME" bash -lc "[ -d \"$model_dir\" ] && [ -f \"$model_dir/config.json\" ]"; then
+              echo "Model already exists under ${model_dir}; skip download"
+            else
+              echo "Model not found under ${model_dir}; downloading model"
+              if ! docker exec -e HF_TOKEN="${HF_TOKEN:-}" "$CONTAINER_NAME" bash -lc "hf download ${{ matrix.model_path }} --local-dir \"$model_dir\""; then
+                echo "Model download failed for '${{ matrix.model_path }}'. Aborting."
+                exit 1
+              fi
             fi
           else
             echo "/models directory not mounted; skipping model download"
