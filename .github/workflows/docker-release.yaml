@@ -51,12 +51,6 @@ on:
         description: "Only release the OOT vLLM image: skip native image test/push and always build/push OOT"
         type: boolean
         default: false
-      vllm_commit:
-        description: "vLLM commit for OOT image"
-        default: "b31e9326a7d9394aab8c767f8ebe225c65594b60"
-      vllm_version:
-        description: "vLLM version label for OOT image tags"
-        default: "0.17.0"
 
 jobs:
   docker-release:
@@ -184,9 +178,9 @@ jobs:
           docker build --network=host -t atom_oot_release:ci \
             --target atom_oot \
             --build-arg OOT_BASE_IMAGE="${OOT_BASE_IMAGE}" \
-            --build-arg MAX_JOBS=64 \
-            --build-arg VLLM_COMMIT="${{ inputs.vllm_commit || env.VLLM_COMMIT }}" \
-            --build-arg INSTALL_LM_EVAL=1 \
+        --build-arg MAX_JOBS=64 \
+        --build-arg VLLM_COMMIT="${{ env.VLLM_COMMIT }}" \
+        --build-arg INSTALL_LM_EVAL=1 \
             --build-arg INSTALL_FASTSAFETENSORS=1 \
             -f docker/Dockerfile .
           docker inspect atom_oot_release:ci
@@ -194,7 +188,7 @@ jobs:
       - name: Push OOT Docker image
         if: ${{ success() && (github.event_name == 'schedule' || inputs.build_oot_image == true || inputs.only_release_oot == true) }}
         run: |
-          VLLM_VER="${{ inputs.vllm_version || env.VLLM_VERSION }}"
+          VLLM_VER="${{ env.VLLM_VERSION }}"
           OOT_TAG="vllm-v${VLLM_VER}-nightly_$(date +%Y%m%d)"
           OOT_LATEST_TAG="vllm-latest"
           OOT_CI_LATEST_TAG="oot-vLLM-CI-pre-build-latest"
