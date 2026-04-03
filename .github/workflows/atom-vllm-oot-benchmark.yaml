@@ -496,6 +496,7 @@ jobs:
       DASHBOARD_MODEL_NAME: ${{ matrix.model.dashboard_model || '' }}
       MODEL_SOURCE_PATH: ${{ matrix.model.source_path || matrix.model.path }}
       MODEL_PATH: ${{ matrix.model.path || matrix.model.source_path }}
+      MODEL_DOWNLOAD_REVISION: ${{ matrix.model.download_revision || '' }}
       OOT_EXTRA_ARGS: ${{ matrix.model.extra_args }}
       BENCH_EXTRA_ARGS: ${{ matrix.model.bench_args }}
       RESULT_PREFIX: ${{ matrix.model.prefix }}
@@ -660,14 +661,41 @@ jobs:
           elif [[ "${model_dir}" != /* ]]; then
             model_dir="/models/${model_dir}"
           fi
-          if [ -n "${MODEL_CACHE_MOUNT}" ]; then
-            echo "/models directory found, downloading model to ${model_dir}"
-            if ! docker exec -e HF_TOKEN="${HF_TOKEN:-}" "$CONTAINER_NAME" bash -lc "hf download \"${MODEL_SOURCE_PATH}\" --local-dir \"$model_dir\""; then
+          if [ -n "${MODEL_DOWNLOAD_REVISION}" ]; then
+            model_dir="${model_dir%/}/snapshots/${MODEL_DOWNLOAD_REVISION}"
+          fi
+          should_download_model=false
+          if [ -n "${MODEL_CACHE_MOUNT}" ] || [ -n "${MODEL_DOWNLOAD_REVISION}" ]; then
+            should_download_model=true
+          fi
+
+          if [ "${should_download_model}" = "true" ]; then
+            if [ -n "${MODEL_DOWNLOAD_REVISION}" ]; then
+              echo "Downloading pinned model snapshot ${MODEL_SOURCE_PATH}@${MODEL_DOWNLOAD_REVISION} to ${model_dir}"
+            else
+              echo "/models directory found, downloading model to ${model_dir}"
+            fi
+
+            if ! docker exec \
+              -e HF_TOKEN="${HF_TOKEN:-}" \
+              -e MODEL_SOURCE_PATH="${MODEL_SOURCE_PATH}" \
+              -e MODEL_DOWNLOAD_REVISION="${MODEL_DOWNLOAD_REVISION}" \
+              -e MODEL_DIR="${model_dir}" \
+              "$CONTAINER_NAME" bash -lc '
+                set -euo pipefail
+                mkdir -p "$MODEL_DIR"
+                DOWNLOAD_CMD=(hf download "$MODEL_SOURCE_PATH" --local-dir "$MODEL_DIR")
+                if [ -n "${MODEL_DOWNLOAD_REVISION}" ]; then
+                  DOWNLOAD_CMD+=(--revision "$MODEL_DOWNLOAD_REVISION")
+                fi
+                echo "Running: ${DOWNLOAD_CMD[*]}"
+                "${DOWNLOAD_CMD[@]}"
+              '; then
               echo "Model download failed for '${MODEL_SOURCE_PATH}'. Aborting."
               exit 1
             fi
           else
-            echo "/models directory not mounted; skipping model download"
+            echo "/models directory not mounted and no pinned revision requested; skipping model download"
           fi
 
       - name: Resolve OOT model path
@@ -683,9 +711,16 @@ jobs:
           elif [[ "${model_dir}" != /* ]]; then
             model_dir="/models/${model_dir}"
           fi
-          if [ -n "${MODEL_CACHE_MOUNT}" ]; then
+          if [ -n "${MODEL_DOWNLOAD_REVISION}" ]; then
+            model_dir="${model_dir%/}/snapshots/${MODEL_DOWNLOAD_REVISION}"
+          fi
+          if [ -n "${MODEL_CACHE_MOUNT}" ] || [ -n "${MODEL_DOWNLOAD_REVISION}" ]; then
             echo "OOT_RESOLVED_MODEL_PATH=${model_dir}" >> "$GITHUB_ENV"
-            echo "Using mounted model path: ${model_dir}"
+            if [ -n "${MODEL_DOWNLOAD_REVISION}" ]; then
+              echo "Using downloaded pinned model path: ${model_dir} (revision ${MODEL_DOWNLOAD_REVISION})"
+            else
+              echo "Using mounted model path: ${model_dir}"
+            fi
           else
             echo "OOT_RESOLVED_MODEL_PATH=${MODEL_SOURCE_PATH}" >> "$GITHUB_ENV"
             echo "Using model id: ${MODEL_SOURCE_PATH}"
