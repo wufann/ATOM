@@ -82,7 +82,7 @@ env:
   GPU_ARCH: "gfx942;gfx950"
   AITER_REPO: "https://github.com/ROCm/aiter.git"
   AITER_COMMIT: "HEAD"
-  VLLM_COMMIT: "b31e9326a7d9394aab8c767f8ebe225c65594b60"
+  VLLM_COMMIT: "2a69949bdadf0e8942b7a1619b229cb475beef20"
 
 jobs:
   # ---------- OOT CI path (pull_request only) ----------
@@ -177,7 +177,7 @@ jobs:
     name: Reuse OOT CI image
     runs-on: build-only-atom
     env:
-      VLLM_COMMIT: b31e9326a7d9394aab8c767f8ebe225c65594b60
+      VLLM_COMMIT: 2a69949bdadf0e8942b7a1619b229cb475beef20
       AITER_ARTIFACT_ID: ${{ needs.download_aiter_wheel.outputs.aiter_artifact_id }}
     steps:
       - name: Initialize OOT image tag
@@ -393,8 +393,8 @@ jobs:
     timeout-minutes: 180
     env:
       CONTAINER_NAME: atom_vllm_oot_${{ strategy.job-index }}
-      VLLM_COMMIT: b31e9326a7d9394aab8c767f8ebe225c65594b60
-      VLLM_VERSION: "0.17"
+      VLLM_COMMIT: 2a69949bdadf0e8942b7a1619b229cb475beef20
+      VLLM_VERSION: "0.19.0"
       AITER_ARTIFACT_ID: ${{ needs.download_aiter_wheel.outputs.aiter_artifact_id }}
 
     steps:
