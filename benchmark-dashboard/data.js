@@ -1,146 +1,8 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1775240535148,
+  "lastUpdate": 1775240737747,
   "repoUrl": "https://github.com/ROCm/ATOM",
   "entries": {
     "Benchmark": [
-      {
-        "commit": {
-          "author": {
-            "name": "Lingpeng Jin",
-            "username": "valarLip",
-            "email": "103567126+valarLip@users.noreply.github.com"
-          },
-          "committer": {
-            "name": "Lingpeng Jin",
-            "username": "valarLip",
-            "email": "103567126+valarLip@users.noreply.github.com"
-          },
-          "id": "d2d8136076a14a39a8db9677ab4c59109f2f969f",
-          "message": "fix: remove || 'true' that swallowed explicit false in model enable check\n\nBoolean inputs.xxx is falsy when false, so `false || 'true'` always\nevaluates to 'true', making it impossible to disable a model via\nworkflow_dispatch. Input defaults already provide the true fallback.",
-          "timestamp": "2026-03-15T02:48:55Z",
-          "url": "https://github.com/ROCm/ATOM/commit/d2d8136076a14a39a8db9677ab4c59109f2f969f"
-        },
-        "date": 1773543539085,
-        "tool": "customBiggerIsBetter",
-        "benches": [
-          {
-            "name": "DeepSeek-R1-0528 1024/1024 c=4 throughput (tok/s)",
-            "value": 328.29,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23101832261"
-          },
-          {
-            "name": "DeepSeek-R1-0528 1024/1024 c=4 Total Tput (tok/s)",
-            "value": 659.79,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23101832261"
-          },
-          {
-            "name": "DeepSeek-R1-0528 1024/1024 c=4 TTFT (ms)",
-            "value": 109.01,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23101832261"
-          },
-          {
-            "name": "DeepSeek-R1-0528 1024/1024 c=4 TPOT (ms)",
-            "value": 11.7,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23101832261"
-          },
-          {
-            "name": "DeepSeek-R1-0528 1024/1024 c=4 _gpu_count",
-            "value": 8,
-            "unit": ""
-          },
-          {
-            "name": "DeepSeek-R1-0528-mtp3 1024/1024 c=4 throughput (tok/s)",
-            "value": 567.53,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23101832261"
-          },
-          {
-            "name": "DeepSeek-R1-0528-mtp3 1024/1024 c=4 Total Tput (tok/s)",
-            "value": 1142.61,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23101832261"
-          },
-          {
-            "name": "DeepSeek-R1-0528-mtp3 1024/1024 c=4 TTFT (ms)",
-            "value": 98.54,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23101832261"
-          },
-          {
-            "name": "DeepSeek-R1-0528-mtp3 1024/1024 c=4 TPOT (ms)",
-            "value": 6.68,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23101832261"
-          },
-          {
-            "name": "DeepSeek-R1-0528-mtp3 1024/1024 c=4 _gpu_count",
-            "value": 8,
-            "unit": ""
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=4 throughput (tok/s)",
-            "value": 160,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23101832261"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=4 Total Tput (tok/s)",
-            "value": 321.55,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23101832261"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=4 TTFT (ms)",
-            "value": 139.49,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23101832261"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=4 TPOT (ms)",
-            "value": 23.98,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23101832261"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=4 _gpu_count",
-            "value": 8,
-            "unit": ""
-          },
-          {
-            "name": "gpt-oss-120b 1024/1024 c=4 throughput (tok/s)",
-            "value": 872.01,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23101832261"
-          },
-          {
-            "name": "gpt-oss-120b 1024/1024 c=4 Total Tput (tok/s)",
-            "value": 1752.54,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23101832261"
-          },
-          {
-            "name": "gpt-oss-120b 1024/1024 c=4 TTFT (ms)",
-            "value": 49.19,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23101832261"
-          },
-          {
-            "name": "gpt-oss-120b 1024/1024 c=4 TPOT (ms)",
-            "value": 4.4,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23101832261"
-          },
-          {
-            "name": "gpt-oss-120b 1024/1024 c=4 _gpu_count",
-            "value": 1,
-            "unit": ""
-          }
-        ]
-      },
       {
         "commit": {
           "author": {
@@ -76555,6 +76417,34 @@ window.BENCHMARK_DATA = {
             "value": 0.0023,
             "unit": "score",
             "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23956762308 | Threshold: 0.38 | Baseline: 0.38 | BaselineModel: openai/gpt-oss-120b | strict-match: 0.0 | fewshot: 3 | Model: /models/openai/gpt-oss-120b"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "zejunchen-zejun",
+            "username": "zejunchen-zejun",
+            "email": "zejun.chen@amd.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "efde2befff305dc930707d06b0185bf422ea0f1e",
+          "message": "[plugin][OOT CI] refine OOT CI/dashboard/OOT docker release (#459)\n\n* [plugin][OOT CI] change the OOT CI mount folder logic\nto make model hit cache instead of downloading\n\nSigned-off-by: zejunchen-zejun <zejun.chen@amd.com>",
+          "timestamp": "2026-04-03T10:15:42Z",
+          "url": "https://github.com/ROCm/ATOM/commit/efde2befff305dc930707d06b0185bf422ea0f1e"
+        },
+        "date": 1775240736385,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ATOM-vLLM::gpt-oss-120b TP1 accuracy (GSM8K)",
+            "value": 0.417,
+            "unit": "score",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23956762308 | Threshold: 0.38 | Baseline: 0.38 | BaselineModel: openai/gpt-oss-120b | strict-match: 0.2434 | fewshot: 3 | Model: /models/openai/gpt-oss-120b"
           }
         ]
       }
