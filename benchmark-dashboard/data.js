@@ -1,146 +1,8 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1775211787380,
+  "lastUpdate": 1775212325270,
   "repoUrl": "https://github.com/ROCm/ATOM",
   "entries": {
     "Benchmark": [
-      {
-        "commit": {
-          "author": {
-            "name": "Lingpeng Jin",
-            "username": "valarLip",
-            "email": "103567126+valarLip@users.noreply.github.com"
-          },
-          "committer": {
-            "name": "Lingpeng Jin",
-            "username": "valarLip",
-            "email": "103567126+valarLip@users.noreply.github.com"
-          },
-          "id": "b78bd3d0b3148d1ead363e200d351b1c6600552c",
-          "message": "docs: update benchmark-guide warmup and add parameter comments",
-          "timestamp": "2026-03-21T04:42:15Z",
-          "url": "https://github.com/ROCm/ATOM/commit/b78bd3d0b3148d1ead363e200d351b1c6600552c"
-        },
-        "date": 1774070679490,
-        "tool": "customBiggerIsBetter",
-        "benches": [
-          {
-            "name": "DeepSeek-R1-0528 1024/1024 c=128 throughput (tok/s)",
-            "value": 4530.93,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23372240231"
-          },
-          {
-            "name": "DeepSeek-R1-0528 1024/1024 c=128 Total Tput (tok/s)",
-            "value": 9071.82,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23372240231"
-          },
-          {
-            "name": "DeepSeek-R1-0528 1024/1024 c=128 TTFT (ms)",
-            "value": 302.25,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23372240231"
-          },
-          {
-            "name": "DeepSeek-R1-0528 1024/1024 c=128 TPOT (ms)",
-            "value": 27.2,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23372240231"
-          },
-          {
-            "name": "DeepSeek-R1-0528 1024/1024 c=128 _gpu_count",
-            "value": 8,
-            "unit": ""
-          },
-          {
-            "name": "DeepSeek-R1-0528-mtp3 1024/1024 c=128 throughput (tok/s)",
-            "value": 5527.81,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23372240231"
-          },
-          {
-            "name": "DeepSeek-R1-0528-mtp3 1024/1024 c=128 Total Tput (tok/s)",
-            "value": 11085.64,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23372240231"
-          },
-          {
-            "name": "DeepSeek-R1-0528-mtp3 1024/1024 c=128 TTFT (ms)",
-            "value": 339.85,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23372240231"
-          },
-          {
-            "name": "DeepSeek-R1-0528-mtp3 1024/1024 c=128 TPOT (ms)",
-            "value": 22.12,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23372240231"
-          },
-          {
-            "name": "DeepSeek-R1-0528-mtp3 1024/1024 c=128 _gpu_count",
-            "value": 8,
-            "unit": ""
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=128 throughput (tok/s)",
-            "value": 2607.34,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23372240231"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=128 Total Tput (tok/s)",
-            "value": 5220.42,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23372240231"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=128 TTFT (ms)",
-            "value": 400.14,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23372240231"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=128 TPOT (ms)",
-            "value": 47.38,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23372240231"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=128 _gpu_count",
-            "value": 8,
-            "unit": ""
-          },
-          {
-            "name": "gpt-oss-120b 1024/1024 c=128 throughput (tok/s)",
-            "value": 8559.98,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23372240231"
-          },
-          {
-            "name": "gpt-oss-120b 1024/1024 c=128 Total Tput (tok/s)",
-            "value": 17138.77,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23372240231"
-          },
-          {
-            "name": "gpt-oss-120b 1024/1024 c=128 TTFT (ms)",
-            "value": 213.21,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23372240231"
-          },
-          {
-            "name": "gpt-oss-120b 1024/1024 c=128 TPOT (ms)",
-            "value": 14.27,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23372240231"
-          },
-          {
-            "name": "gpt-oss-120b 1024/1024 c=128 _gpu_count",
-            "value": 1,
-            "unit": ""
-          }
-        ]
-      },
       {
         "commit": {
           "author": {
@@ -64135,6 +63997,57 @@ window.BENCHMARK_DATA = {
           },
           {
             "name": "ATOM-vLLM::Kimi-K2.5-MXFP4-tp4 1024/1024 c=16 _gpu_count",
+            "value": 4,
+            "unit": ""
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "zejunchen-zejun",
+            "username": "zejunchen-zejun",
+            "email": "zejun.chen@amd.com"
+          },
+          "committer": {
+            "name": "zejunchen-zejun",
+            "username": "zejunchen-zejun",
+            "email": "zejun.chen@amd.com"
+          },
+          "id": "902341080bc8f69a382b8e02be3afb3505e60e3f",
+          "message": "[plugin][oot benchmark] use specific commit model for K2.5\n\nSigned-off-by: zejunchen-zejun <zejun.chen@amd.com>",
+          "timestamp": "2026-04-03T08:53:37Z",
+          "url": "https://github.com/ROCm/ATOM/commit/902341080bc8f69a382b8e02be3afb3505e60e3f"
+        },
+        "date": 1775212323706,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ATOM-vLLM::Qwen3.5-397B-A17B-FP8-tp4 8192/1024 c=8 throughput (tok/s)",
+            "value": 687.05,
+            "unit": "tok/s",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23940746614 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1 | Docker: rocm/atom-dev:vllm-v0.17.0-nightly_20260403"
+          },
+          {
+            "name": "ATOM-vLLM::Qwen3.5-397B-A17B-FP8-tp4 8192/1024 c=8 Total Tput (tok/s)",
+            "value": 6111.59,
+            "unit": "tok/s",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23940746614 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1 | Docker: rocm/atom-dev:vllm-v0.17.0-nightly_20260403"
+          },
+          {
+            "name": "ATOM-vLLM::Qwen3.5-397B-A17B-FP8-tp4 8192/1024 c=8 TTFT (ms)",
+            "value": 363.44,
+            "unit": "ms",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23940746614 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1 | Docker: rocm/atom-dev:vllm-v0.17.0-nightly_20260403"
+          },
+          {
+            "name": "ATOM-vLLM::Qwen3.5-397B-A17B-FP8-tp4 8192/1024 c=8 TPOT (ms)",
+            "value": 11.05,
+            "unit": "ms",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23940746614 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1 | Docker: rocm/atom-dev:vllm-v0.17.0-nightly_20260403"
+          },
+          {
+            "name": "ATOM-vLLM::Qwen3.5-397B-A17B-FP8-tp4 8192/1024 c=8 _gpu_count",
             "value": 4,
             "unit": ""
           }
