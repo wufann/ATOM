@@ -78,7 +78,6 @@ env:
   GITHUB_REPO_URL: ${{ github.event.pull_request.head.repo.clone_url || 'https://github.com/ROCm/ATOM.git' }}
   GITHUB_COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.event.head_commit.id || github.sha }}
   NIGHTLY_OOT_IMAGE_TAG: rocm/atom-dev:vllm-latest
-  OOT_CI_PREBUILT_LATEST_IMAGE_TAG: rocm/atom-dev:oot-vLLM-CI-pre-build-latest
   VALIDATION_IMAGE_REPO: rocm/atom-dev
   GPU_ARCH: "gfx942;gfx950"
   AITER_REPO: "https://github.com/ROCm/aiter.git"
@@ -177,8 +176,6 @@ jobs:
     needs: [check-signal, download_aiter_wheel]
     name: Reuse OOT CI image
     runs-on: build-only-atom
-    outputs:
-      should_refresh_ci_latest: ${{ steps.ci_latest_policy.outputs.should_refresh_ci_latest }}
     env:
       VLLM_COMMIT: b31e9326a7d9394aab8c767f8ebe225c65594b60
       AITER_ARTIFACT_ID: ${{ needs.download_aiter_wheel.outputs.aiter_artifact_id }}
@@ -278,15 +275,15 @@ jobs:
           set -euo pipefail
           echo "build_mode=full" >> "$GITHUB_OUTPUT"
 
-          if ! docker pull "${OOT_CI_PREBUILT_LATEST_IMAGE_TAG}" >/dev/null 2>&1; then
-            echo "Unable to pull ${OOT_CI_PREBUILT_LATEST_IMAGE_TAG}; falling back to a full vLLM rebuild."
+          if ! docker pull "${NIGHTLY_OOT_IMAGE_TAG}" >/dev/null 2>&1; then
+            echo "Unable to pull ${NIGHTLY_OOT_IMAGE_TAG}; falling back to a full vLLM rebuild."
             exit 0
           fi
 
-          LATEST_VLLM_COMMIT="$(docker inspect --format '{{ index .Config.Labels "com.rocm.atom.vllm_commit" }}' "${OOT_CI_PREBUILT_LATEST_IMAGE_TAG}" 2>/dev/null || true)"
+          LATEST_VLLM_COMMIT="$(docker inspect --format '{{ index .Config.Labels "com.rocm.atom.vllm_commit" }}' "${NIGHTLY_OOT_IMAGE_TAG}" 2>/dev/null || true)"
           if [ -n "${LATEST_VLLM_COMMIT}" ] && [ "${LATEST_VLLM_COMMIT}" = "${VLLM_COMMIT}" ]; then
             echo "build_mode=fast" >> "$GITHUB_OUTPUT"
-            echo "Reusing ${OOT_CI_PREBUILT_LATEST_IMAGE_TAG} as the OOT CI base (vLLM commit ${LATEST_VLLM_COMMIT})."
+            echo "Reusing ${NIGHTLY_OOT_IMAGE_TAG} as the OOT CI base (vLLM commit ${LATEST_VLLM_COMMIT})."
           else
             echo "OOT CI latest image label mismatch or missing. Expected ${VLLM_COMMIT}, got ${LATEST_VLLM_COMMIT:-<missing>}; rebuilding vLLM."
           fi
@@ -296,7 +293,7 @@ jobs:
         run: |
           DOCKER_BUILDKIT=1 docker build --network=host \
             -t atom_oot:ci \
-            --build-arg OOT_BASE_IMAGE="${OOT_CI_PREBUILT_LATEST_IMAGE_TAG}" \
+            --build-arg OOT_BASE_IMAGE="${NIGHTLY_OOT_IMAGE_TAG}" \
             --build-arg GITHUB_REPO_URL="${GITHUB_REPO_URL}" \
             --build-arg GITHUB_COMMIT_SHA="${GITHUB_COMMIT_SHA}" \
             --build-arg VLLM_COMMIT="${VLLM_COMMIT}" \
@@ -332,20 +329,6 @@ jobs:
             --build-arg INSTALL_FASTSAFETENSORS=1 \
             -f docker/Dockerfile .
 
-      - name: Decide whether to refresh OOT CI latest
-        id: ci_latest_policy
-        if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork }}
-        env:
-          EXISTING_IMAGE: ${{ steps.existing_oot_image.outputs.image_exists }}
-          BUILD_MODE: ${{ steps.build_mode.outputs.build_mode }}
-        run: |
-          SHOULD_REFRESH=false
-          if [ "${EXISTING_IMAGE}" != "true" ] && [ "${BUILD_MODE}" != "fast" ]; then
-            SHOULD_REFRESH=true
-          fi
-          echo "should_refresh_ci_latest=${SHOULD_REFRESH}" >> "$GITHUB_OUTPUT"
-          echo "OOT CI latest refresh required: ${SHOULD_REFRESH}"
-
       - name: Push Docker image
         if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork) && steps.existing_oot_image.outputs.image_exists != 'true' }}
         run: |
@@ -364,7 +347,6 @@ jobs:
           docker rmi "atom_oot_base:ci" || true
           docker rmi "atom_oot:ci" || true
           docker rmi "${OOT_IMAGE_TAG}" || true
-          docker rmi "${OOT_CI_PREBUILT_LATEST_IMAGE_TAG}" || true
 
   atom-vllm-oot:
     needs: [check-signal, download_aiter_wheel, build_oot_image]
@@ -491,22 +473,22 @@ jobs:
           docker rmi "atom_oot:ci" || true
 
           BUILD_MODE="full"
-          if docker pull "${OOT_CI_PREBUILT_LATEST_IMAGE_TAG}" >/dev/null 2>&1; then
-            LATEST_VLLM_COMMIT="$(docker inspect --format '{{ index .Config.Labels "com.rocm.atom.vllm_commit" }}' "${OOT_CI_PREBUILT_LATEST_IMAGE_TAG}" 2>/dev/null || true)"
+          if docker pull "${NIGHTLY_OOT_IMAGE_TAG}" >/dev/null 2>&1; then
+            LATEST_VLLM_COMMIT="$(docker inspect --format '{{ index .Config.Labels "com.rocm.atom.vllm_commit" }}' "${NIGHTLY_OOT_IMAGE_TAG}" 2>/dev/null || true)"
             if [ -n "${LATEST_VLLM_COMMIT}" ] && [ "${LATEST_VLLM_COMMIT}" = "${VLLM_COMMIT}" ]; then
               BUILD_MODE="fast"
-              echo "Reusing ${OOT_CI_PREBUILT_LATEST_IMAGE_TAG} locally for fork PR OOT CI."
+              echo "Reusing ${NIGHTLY_OOT_IMAGE_TAG} locally for fork PR OOT CI."
             else
               echo "OOT CI latest image label mismatch or missing. Expected ${VLLM_COMMIT}, got ${LATEST_VLLM_COMMIT:-<missing>}; rebuilding vLLM locally."
             fi
           else
-            echo "Unable to pull ${OOT_CI_PREBUILT_LATEST_IMAGE_TAG}; rebuilding vLLM locally."
+            echo "Unable to pull ${NIGHTLY_OOT_IMAGE_TAG}; rebuilding vLLM locally."
           fi
 
           if [ "${BUILD_MODE}" = "fast" ]; then
             DOCKER_BUILDKIT=1 docker build --network=host \
               -t atom_oot:ci \
-              --build-arg OOT_BASE_IMAGE="${OOT_CI_PREBUILT_LATEST_IMAGE_TAG}" \
+              --build-arg OOT_BASE_IMAGE="${NIGHTLY_OOT_IMAGE_TAG}" \
               --build-arg GITHUB_REPO_URL="${GITHUB_REPO_URL}" \
               --build-arg GITHUB_COMMIT_SHA="${GITHUB_COMMIT_SHA}" \
               --build-arg VLLM_COMMIT="${VLLM_COMMIT}" \
@@ -752,7 +734,6 @@ jobs:
           rm -f Dockerfile.mod || true
           docker rmi "atom_oot_base:ci" || true
           docker rmi "atom_oot:ci" || true
-          docker rmi "${OOT_CI_PREBUILT_LATEST_IMAGE_TAG}" || true
           KEEP_COUNT="${OOT_IMAGE_CACHE_KEEP:-3}"
           if [[ "${OOT_IMAGE_TAG}" == rocm/atom-dev:oot-pre-build-* ]]; then
             echo "Keeping current OOT image tag and the ${KEEP_COUNT} most recent oot-pre-build tags."
@@ -774,29 +755,6 @@ jobs:
               docker rmi "${tag}" || true
             done
           fi
-
-  promote-oot-ci-latest:
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && github.event.pull_request.draft == false && !github.event.pull_request.head.repo.fork && needs.atom-vllm-oot.result == 'success' && needs.build_oot_image.outputs.should_refresh_ci_latest == 'true' }}
-    name: Promote OOT CI latest image
-    needs: [build_oot_image, atom-vllm-oot]
-    runs-on: build-only-atom
-    steps:
-      - name: Docker Login
-        run: |
-          echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
-
-      - name: Promote commit image to OOT CI latest
-        run: |
-          COMMIT_TAG="rocm/atom-dev:oot-pre-build-${GITHUB_COMMIT_SHA}"
-          docker pull "${COMMIT_TAG}"
-          docker tag "${COMMIT_TAG}" "${OOT_CI_PREBUILT_LATEST_IMAGE_TAG}"
-          docker push "${OOT_CI_PREBUILT_LATEST_IMAGE_TAG}"
-
-      - name: Clean up promoted images
-        if: always()
-        run: |
-          docker rmi "rocm/atom-dev:oot-pre-build-${GITHUB_COMMIT_SHA}" || true
-          docker rmi "${OOT_CI_PREBUILT_LATEST_IMAGE_TAG}" || true
 
   # ---------- OOT full validation path (schedule / workflow_dispatch) ----------
   prepare-oot-image:
