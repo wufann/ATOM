@@ -1,262 +1,8 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1775222980097,
+  "lastUpdate": 1775222989982,
   "repoUrl": "https://github.com/ROCm/ATOM",
   "entries": {
     "Benchmark": [
-      {
-        "commit": {
-          "author": {
-            "name": "haoyangli0109",
-            "username": "haoyangli0109",
-            "email": "lihaoyang0109@gmail.com"
-          },
-          "committer": {
-            "name": "GitHub",
-            "username": "web-flow",
-            "email": "noreply@github.com"
-          },
-          "id": "464ce6751e52b8f278b39cd03434005dc81dda28",
-          "message": "WIP (#411)\n\nSigned-off-by: Haoyang Li <lihaoyang0109@gmail.com>",
-          "timestamp": "2026-04-02T12:09:37Z",
-          "url": "https://github.com/ROCm/ATOM/commit/464ce6751e52b8f278b39cd03434005dc81dda28"
-        },
-        "date": 1775137437746,
-        "tool": "customBiggerIsBetter",
-        "benches": [
-          {
-            "name": "GLM-5-FP8 1024/1024 c=128 throughput (tok/s)",
-            "value": 2930,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23902037281 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=128 Total Tput (tok/s)",
-            "value": 5866.45,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23902037281 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=128 TTFT (ms)",
-            "value": 411.35,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23902037281 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=128 TPOT (ms)",
-            "value": 42.06,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23902037281 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=128 _gpu_count",
-            "value": 8,
-            "unit": ""
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=16 throughput (tok/s)",
-            "value": 700.85,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23902037281 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=16 Total Tput (tok/s)",
-            "value": 1409.16,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23902037281 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=16 TTFT (ms)",
-            "value": 163.06,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23902037281 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=16 TPOT (ms)",
-            "value": 22.14,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23902037281 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=16 _gpu_count",
-            "value": 8,
-            "unit": ""
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=2 throughput (tok/s)",
-            "value": 109.22,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23902037281 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=2 Total Tput (tok/s)",
-            "value": 216.44,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23902037281 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=2 TTFT (ms)",
-            "value": 117.23,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23902037281 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=2 TPOT (ms)",
-            "value": 18.15,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23902037281 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=2 _gpu_count",
-            "value": 8,
-            "unit": ""
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=256 throughput (tok/s)",
-            "value": 4217.86,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23902037281 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=256 Total Tput (tok/s)",
-            "value": 8431.64,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23902037281 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=256 TTFT (ms)",
-            "value": 633.57,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23902037281 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=256 TPOT (ms)",
-            "value": 58.57,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23902037281 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=256 _gpu_count",
-            "value": 8,
-            "unit": ""
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=32 throughput (tok/s)",
-            "value": 1129.17,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23902037281 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=32 Total Tput (tok/s)",
-            "value": 2254.78,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23902037281 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=32 TTFT (ms)",
-            "value": 590.02,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23902037281 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=32 TPOT (ms)",
-            "value": 26.99,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23902037281 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=32 _gpu_count",
-            "value": 8,
-            "unit": ""
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=4 throughput (tok/s)",
-            "value": 206.67,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23902037281 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=4 Total Tput (tok/s)",
-            "value": 415.36,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23902037281 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=4 TTFT (ms)",
-            "value": 125.66,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23902037281 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=4 TPOT (ms)",
-            "value": 18.62,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23902037281 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=4 _gpu_count",
-            "value": 8,
-            "unit": ""
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=64 throughput (tok/s)",
-            "value": 1868.43,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23902037281 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=64 Total Tput (tok/s)",
-            "value": 3737.7,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23902037281 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=64 TTFT (ms)",
-            "value": 270.44,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23902037281 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=64 TPOT (ms)",
-            "value": 32.93,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23902037281 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=64 _gpu_count",
-            "value": 8,
-            "unit": ""
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=8 throughput (tok/s)",
-            "value": 376.96,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23902037281 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=8 Total Tput (tok/s)",
-            "value": 751.14,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23902037281 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=8 TTFT (ms)",
-            "value": 135.3,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23902037281 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=8 TPOT (ms)",
-            "value": 20.63,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23902037281 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=8 _gpu_count",
-            "value": 8,
-            "unit": ""
-          }
-        ]
-      },
       {
         "commit": {
           "author": {
@@ -9373,6 +9119,57 @@ window.BENCHMARK_DATA = {
           {
             "name": "ATOM-vLLM::Qwen3.5-397B-A17B-FP8 1024/1024 c=8 _gpu_count",
             "value": 8,
+            "unit": ""
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "zejunchen-zejun",
+            "username": "zejunchen-zejun",
+            "email": "zejun.chen@amd.com"
+          },
+          "committer": {
+            "name": "zejunchen-zejun",
+            "username": "zejunchen-zejun",
+            "email": "zejun.chen@amd.com"
+          },
+          "id": "902341080bc8f69a382b8e02be3afb3505e60e3f",
+          "message": "[plugin][oot benchmark] use specific commit model for K2.5\n\nSigned-off-by: zejunchen-zejun <zejun.chen@amd.com>",
+          "timestamp": "2026-04-03T08:53:37Z",
+          "url": "https://github.com/ROCm/ATOM/commit/902341080bc8f69a382b8e02be3afb3505e60e3f"
+        },
+        "date": 1775222988211,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ATOM-vLLM::Qwen3-Next-80B-A3B-Instruct-FP8-tp1 1024/8192 c=8 throughput (tok/s)",
+            "value": 1015.42,
+            "unit": "tok/s",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23940746614 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1 | Docker: rocm/atom-dev:vllm-v0.17.0-nightly_20260403"
+          },
+          {
+            "name": "ATOM-vLLM::Qwen3-Next-80B-A3B-Instruct-FP8-tp1 1024/8192 c=8 Total Tput (tok/s)",
+            "value": 1142.69,
+            "unit": "tok/s",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23940746614 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1 | Docker: rocm/atom-dev:vllm-v0.17.0-nightly_20260403"
+          },
+          {
+            "name": "ATOM-vLLM::Qwen3-Next-80B-A3B-Instruct-FP8-tp1 1024/8192 c=8 TTFT (ms)",
+            "value": 108.4,
+            "unit": "ms",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23940746614 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1 | Docker: rocm/atom-dev:vllm-v0.17.0-nightly_20260403"
+          },
+          {
+            "name": "ATOM-vLLM::Qwen3-Next-80B-A3B-Instruct-FP8-tp1 1024/8192 c=8 TPOT (ms)",
+            "value": 7.65,
+            "unit": "ms",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23940746614 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1 | Docker: rocm/atom-dev:vllm-v0.17.0-nightly_20260403"
+          },
+          {
+            "name": "ATOM-vLLM::Qwen3-Next-80B-A3B-Instruct-FP8-tp1 1024/8192 c=8 _gpu_count",
+            "value": 1,
             "unit": ""
           }
         ]
