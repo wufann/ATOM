@@ -263,7 +263,7 @@ jobs:
               git clone "${GITHUB_REPO_URL}" /app/ATOM && \
               cd /app/ATOM && \
               git checkout "${GITHUB_COMMIT_SHA}" && \
-              pip install -e . && \
+              pip install -e . --no-deps && \
               echo "=== ATOM version AFTER installation ===" && pip show atom || true
           RUN pip show amd-aiter atom vllm torch triton mori || true
           EOF
@@ -461,7 +461,7 @@ jobs:
               git clone "${GITHUB_REPO_URL}" /app/ATOM && \
               cd /app/ATOM && \
               git checkout "${GITHUB_COMMIT_SHA}" && \
-              pip install -e . && \
+              pip install -e . --no-deps && \
               echo "=== ATOM version AFTER installation ===" && pip show atom || true
           RUN pip show amd-aiter atom vllm torch triton mori || true
           EOF
