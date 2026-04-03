@@ -1,262 +1,8 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1775214096511,
+  "lastUpdate": 1775214677647,
   "repoUrl": "https://github.com/ROCm/ATOM",
   "entries": {
     "Benchmark": [
-      {
-        "commit": {
-          "author": {
-            "name": "Lingpeng Jin",
-            "username": "valarLip",
-            "email": "103567126+valarLip@users.noreply.github.com"
-          },
-          "committer": {
-            "name": "Lingpeng Jin",
-            "username": "valarLip",
-            "email": "103567126+valarLip@users.noreply.github.com"
-          },
-          "id": "76c855bdf8fe3f8cb1398d57fdcfbc373d46d80e",
-          "message": "fix: benchmark workflow checkbox sync + dashboard fixes\n\natom-benchmark.yaml:\n- Add MiniMax-M2.5 checkbox to workflow_dispatch inputs\n- Fix descriptions: DeepSeek-R1-0528 (+ MTP3), MXFP4 (+ MXFP4-MTP3)\n\ndashboard (index.html):\n- Fix accuracy entries leaking into performance historyMap/Trends\n- Accuracy tab not filtered by model dropdown (always shows all models)\n- Consistent case-insensitive sort across all tabs (filter, trends, tradeoff, accuracy)\n- Add favicon\n\natom-test.yaml:\n- Print enabled/disabled model list in Load test model configs step",
-          "timestamp": "2026-03-28T08:12:36Z",
-          "url": "https://github.com/ROCm/ATOM/commit/76c855bdf8fe3f8cb1398d57fdcfbc373d46d80e"
-        },
-        "date": 1774689931594,
-        "tool": "customBiggerIsBetter",
-        "benches": [
-          {
-            "name": "MiniMax-M2.5 1024/1024 c=128 throughput (tok/s)",
-            "value": 3765.39,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23681168780 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "MiniMax-M2.5 1024/1024 c=128 Total Tput (tok/s)",
-            "value": 7539.06,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23681168780 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "MiniMax-M2.5 1024/1024 c=128 TTFT (ms)",
-            "value": 312.12,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23681168780 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "MiniMax-M2.5 1024/1024 c=128 TPOT (ms)",
-            "value": 32.81,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23681168780 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "MiniMax-M2.5 1024/1024 c=128 _gpu_count",
-            "value": 2,
-            "unit": ""
-          },
-          {
-            "name": "MiniMax-M2.5 1024/1024 c=16 throughput (tok/s)",
-            "value": 1062.96,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23681168780 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "MiniMax-M2.5 1024/1024 c=16 Total Tput (tok/s)",
-            "value": 2137.24,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23681168780 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "MiniMax-M2.5 1024/1024 c=16 TTFT (ms)",
-            "value": 127.8,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23681168780 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "MiniMax-M2.5 1024/1024 c=16 TPOT (ms)",
-            "value": 14.6,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23681168780 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "MiniMax-M2.5 1024/1024 c=16 _gpu_count",
-            "value": 2,
-            "unit": ""
-          },
-          {
-            "name": "MiniMax-M2.5 1024/1024 c=2 throughput (tok/s)",
-            "value": 215.24,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23681168780 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "MiniMax-M2.5 1024/1024 c=2 Total Tput (tok/s)",
-            "value": 426.54,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23681168780 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "MiniMax-M2.5 1024/1024 c=2 TTFT (ms)",
-            "value": 78.93,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23681168780 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "MiniMax-M2.5 1024/1024 c=2 TPOT (ms)",
-            "value": 9.19,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23681168780 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "MiniMax-M2.5 1024/1024 c=2 _gpu_count",
-            "value": 2,
-            "unit": ""
-          },
-          {
-            "name": "MiniMax-M2.5 1024/1024 c=256 throughput (tok/s)",
-            "value": 5444.02,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23681168780 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "MiniMax-M2.5 1024/1024 c=256 Total Tput (tok/s)",
-            "value": 10882.77,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23681168780 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "MiniMax-M2.5 1024/1024 c=256 TTFT (ms)",
-            "value": 530.57,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23681168780 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "MiniMax-M2.5 1024/1024 c=256 TPOT (ms)",
-            "value": 45.4,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23681168780 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "MiniMax-M2.5 1024/1024 c=256 _gpu_count",
-            "value": 2,
-            "unit": ""
-          },
-          {
-            "name": "MiniMax-M2.5 1024/1024 c=32 throughput (tok/s)",
-            "value": 1743.08,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23681168780 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "MiniMax-M2.5 1024/1024 c=32 Total Tput (tok/s)",
-            "value": 3480.65,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23681168780 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "MiniMax-M2.5 1024/1024 c=32 TTFT (ms)",
-            "value": 153.25,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23681168780 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "MiniMax-M2.5 1024/1024 c=32 TPOT (ms)",
-            "value": 17.76,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23681168780 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "MiniMax-M2.5 1024/1024 c=32 _gpu_count",
-            "value": 2,
-            "unit": ""
-          },
-          {
-            "name": "MiniMax-M2.5 1024/1024 c=4 throughput (tok/s)",
-            "value": 385.25,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23681168780 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "MiniMax-M2.5 1024/1024 c=4 Total Tput (tok/s)",
-            "value": 774.27,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23681168780 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "MiniMax-M2.5 1024/1024 c=4 TTFT (ms)",
-            "value": 85.27,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23681168780 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "MiniMax-M2.5 1024/1024 c=4 TPOT (ms)",
-            "value": 9.97,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23681168780 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "MiniMax-M2.5 1024/1024 c=4 _gpu_count",
-            "value": 2,
-            "unit": ""
-          },
-          {
-            "name": "MiniMax-M2.5 1024/1024 c=64 throughput (tok/s)",
-            "value": 2390.67,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23681168780 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "MiniMax-M2.5 1024/1024 c=64 Total Tput (tok/s)",
-            "value": 4782.42,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23681168780 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "MiniMax-M2.5 1024/1024 c=64 TTFT (ms)",
-            "value": 213.06,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23681168780 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "MiniMax-M2.5 1024/1024 c=64 TPOT (ms)",
-            "value": 25.89,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23681168780 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "MiniMax-M2.5 1024/1024 c=64 _gpu_count",
-            "value": 2,
-            "unit": ""
-          },
-          {
-            "name": "MiniMax-M2.5 1024/1024 c=8 throughput (tok/s)",
-            "value": 640.26,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23681168780 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "MiniMax-M2.5 1024/1024 c=8 Total Tput (tok/s)",
-            "value": 1275.8,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23681168780 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "MiniMax-M2.5 1024/1024 c=8 TTFT (ms)",
-            "value": 101.96,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23681168780 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "MiniMax-M2.5 1024/1024 c=8 TPOT (ms)",
-            "value": 12.14,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23681168780 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "MiniMax-M2.5 1024/1024 c=8 _gpu_count",
-            "value": 2,
-            "unit": ""
-          }
-        ]
-      },
       {
         "commit": {
           "author": {
@@ -36626,6 +36372,57 @@ window.BENCHMARK_DATA = {
           },
           {
             "name": "ATOM-vLLM::Qwen3.5-397B-A17B-FP8-tp4 1024/1024 c=64 _gpu_count",
+            "value": 4,
+            "unit": ""
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "zejunchen-zejun",
+            "username": "zejunchen-zejun",
+            "email": "zejun.chen@amd.com"
+          },
+          "committer": {
+            "name": "zejunchen-zejun",
+            "username": "zejunchen-zejun",
+            "email": "zejun.chen@amd.com"
+          },
+          "id": "902341080bc8f69a382b8e02be3afb3505e60e3f",
+          "message": "[plugin][oot benchmark] use specific commit model for K2.5\n\nSigned-off-by: zejunchen-zejun <zejun.chen@amd.com>",
+          "timestamp": "2026-04-03T08:53:37Z",
+          "url": "https://github.com/ROCm/ATOM/commit/902341080bc8f69a382b8e02be3afb3505e60e3f"
+        },
+        "date": 1775214675913,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ATOM-vLLM::Qwen3.5-397B-A17B-FP8-tp4 8192/1024 c=16 throughput (tok/s)",
+            "value": 1087.32,
+            "unit": "tok/s",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23940746614 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1 | Docker: rocm/atom-dev:vllm-v0.17.0-nightly_20260403"
+          },
+          {
+            "name": "ATOM-vLLM::Qwen3.5-397B-A17B-FP8-tp4 8192/1024 c=16 Total Tput (tok/s)",
+            "value": 9812.8,
+            "unit": "tok/s",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23940746614 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1 | Docker: rocm/atom-dev:vllm-v0.17.0-nightly_20260403"
+          },
+          {
+            "name": "ATOM-vLLM::Qwen3.5-397B-A17B-FP8-tp4 8192/1024 c=16 TTFT (ms)",
+            "value": 411.42,
+            "unit": "ms",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23940746614 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1 | Docker: rocm/atom-dev:vllm-v0.17.0-nightly_20260403"
+          },
+          {
+            "name": "ATOM-vLLM::Qwen3.5-397B-A17B-FP8-tp4 8192/1024 c=16 TPOT (ms)",
+            "value": 13.81,
+            "unit": "ms",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23940746614 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1 | Docker: rocm/atom-dev:vllm-v0.17.0-nightly_20260403"
+          },
+          {
+            "name": "ATOM-vLLM::Qwen3.5-397B-A17B-FP8-tp4 8192/1024 c=16 _gpu_count",
             "value": 4,
             "unit": ""
           }
