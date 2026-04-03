@@ -275,12 +275,17 @@ jobs:
           set -euo pipefail
           echo "build_mode=full" >> "$GITHUB_OUTPUT"
 
-          if ! docker pull "${NIGHTLY_OOT_IMAGE_TAG}" >/dev/null 2>&1; then
+          if ! docker pull "${NIGHTLY_OOT_IMAGE_TAG}"; then
             echo "Unable to pull ${NIGHTLY_OOT_IMAGE_TAG}; falling back to a full vLLM rebuild."
             exit 0
           fi
 
+          echo "Inspecting ${NIGHTLY_OOT_IMAGE_TAG} labels before deciding whether to reuse it."
+          docker inspect --format 'Image ID: {{.Id}}' "${NIGHTLY_OOT_IMAGE_TAG}" || true
+          docker inspect --format 'Image labels: {{json .Config.Labels}}' "${NIGHTLY_OOT_IMAGE_TAG}" || true
           LATEST_VLLM_COMMIT="$(docker inspect --format '{{ index .Config.Labels "com.rocm.atom.vllm_commit" }}' "${NIGHTLY_OOT_IMAGE_TAG}" 2>/dev/null || true)"
+          echo "Expected vLLM commit label: ${VLLM_COMMIT}"
+          echo "Resolved ${NIGHTLY_OOT_IMAGE_TAG} label com.rocm.atom.vllm_commit: ${LATEST_VLLM_COMMIT:-<missing>}"
           if [ -n "${LATEST_VLLM_COMMIT}" ] && [ "${LATEST_VLLM_COMMIT}" = "${VLLM_COMMIT}" ]; then
             echo "build_mode=fast" >> "$GITHUB_OUTPUT"
             echo "Reusing ${NIGHTLY_OOT_IMAGE_TAG} as the OOT CI base (vLLM commit ${LATEST_VLLM_COMMIT})."
@@ -473,16 +478,21 @@ jobs:
           docker rmi "atom_oot:ci" || true
 
           BUILD_MODE="full"
-          if docker pull "${NIGHTLY_OOT_IMAGE_TAG}" >/dev/null 2>&1; then
+          if ! docker pull "${NIGHTLY_OOT_IMAGE_TAG}"; then
+            echo "Unable to pull ${NIGHTLY_OOT_IMAGE_TAG}; rebuilding vLLM locally."
+          else
+            echo "Inspecting ${NIGHTLY_OOT_IMAGE_TAG} labels before deciding whether to reuse it locally."
+            docker inspect --format 'Image ID: {{.Id}}' "${NIGHTLY_OOT_IMAGE_TAG}" || true
+            docker inspect --format 'Image labels: {{json .Config.Labels}}' "${NIGHTLY_OOT_IMAGE_TAG}" || true
             LATEST_VLLM_COMMIT="$(docker inspect --format '{{ index .Config.Labels "com.rocm.atom.vllm_commit" }}' "${NIGHTLY_OOT_IMAGE_TAG}" 2>/dev/null || true)"
+            echo "Expected vLLM commit label: ${VLLM_COMMIT}"
+            echo "Resolved ${NIGHTLY_OOT_IMAGE_TAG} label com.rocm.atom.vllm_commit: ${LATEST_VLLM_COMMIT:-<missing>}"
             if [ -n "${LATEST_VLLM_COMMIT}" ] && [ "${LATEST_VLLM_COMMIT}" = "${VLLM_COMMIT}" ]; then
               BUILD_MODE="fast"
               echo "Reusing ${NIGHTLY_OOT_IMAGE_TAG} locally for fork PR OOT CI."
             else
               echo "OOT CI latest image label mismatch or missing. Expected ${VLLM_COMMIT}, got ${LATEST_VLLM_COMMIT:-<missing>}; rebuilding vLLM locally."
             fi
-          else
-            echo "Unable to pull ${NIGHTLY_OOT_IMAGE_TAG}; rebuilding vLLM locally."
           fi
 
           if [ "${BUILD_MODE}" = "fast" ]; then
