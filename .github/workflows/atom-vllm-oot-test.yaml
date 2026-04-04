@@ -67,6 +67,11 @@ on:
         required: false
         type: boolean
         default: false
+      upload_accuracy_to_dashboard:
+        description: "Upload OOT accuracy results to dashboard"
+        required: false
+        type: boolean
+        default: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
@@ -1225,7 +1230,7 @@ jobs:
             oot_accuracy_results
 
       - name: Upload accuracy results for dashboard
-        if: always()
+        if: ${{ always() && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.upload_accuracy_to_dashboard)) }}
         uses: actions/upload-artifact@v7
         with:
           name: accuracy-${{ matrix.model_name }}
@@ -1246,7 +1251,7 @@ jobs:
   accuracy-dashboard:
     name: Update OOT accuracy dashboard
     needs: [oot-model-accuracy]
-    if: ${{ always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') }}
+    if: ${{ always() && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.upload_accuracy_to_dashboard)) }}
     runs-on: ubuntu-latest
     permissions:
       actions: read
