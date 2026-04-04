@@ -127,6 +127,15 @@ class vllmAiterAttentionBackendMethods:
     def get_supported_kernel_block_sizes():
         return [16]
 
+    @classmethod
+    def get_preferred_block_size(cls, default_block_size: int) -> int:
+        # Mirror vLLM 0.19's backend contract: keep the framework default when
+        # it already satisfies the kernel requirement, otherwise fall back to
+        # the smallest supported multiple.
+        if default_block_size % 16 == 0:
+            return default_block_size
+        return 16
+
     @staticmethod
     def get_kv_cache_shape(
         num_blocks: int,
@@ -1327,6 +1336,13 @@ class vllmAiterMLABackendMethods:
     @staticmethod
     def get_supported_kernel_block_sizes():
         return [1]
+
+    @classmethod
+    def get_preferred_block_size(cls, default_block_size: int) -> int:
+        # ATOM's MLA plugin path assumes kernel/page block size == 1 throughout
+        # metadata construction and KV-cache indexing, so force that value when
+        # vLLM 0.19 negotiates the backend-specific cache block size.
+        return 1
 
     @staticmethod
     def get_kv_cache_shape(
