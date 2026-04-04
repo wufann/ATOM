@@ -68,7 +68,7 @@ on:
         type: boolean
         default: false
       upload_accuracy_to_dashboard:
-        description: "Upload OOT accuracy results to dashboard"
+        description: "Optional: upload OOT accuracy results to dashboard after this manual run"
         required: false
         type: boolean
         default: false
