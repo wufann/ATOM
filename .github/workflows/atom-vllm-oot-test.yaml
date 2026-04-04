@@ -781,7 +781,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Docker Login
-        if: ${{ github.event_name == 'workflow_dispatch' && github.ref_name != 'main' }}
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         run: |
           echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
 
@@ -915,12 +915,8 @@ jobs:
           print(f"model_matrix={json.dumps({'include': selected})}")
           PY
 
-          if [ "${GITHUB_EVENT_NAME}" != "workflow_dispatch" ] || [ "${GITHUB_REF_NAME}" = "main" ]; then
-            if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
-              echo "Manual run on main reuses published OOT image: ${NIGHTLY_OOT_IMAGE_TAG}"
-            else
-              echo "Scheduled run uses published OOT image: ${NIGHTLY_OOT_IMAGE_TAG}"
-            fi
+          if [ "${GITHUB_EVENT_NAME}" = "schedule" ]; then
+            echo "Scheduled run uses published OOT image: ${NIGHTLY_OOT_IMAGE_TAG}"
             echo "oot_image_tag=${NIGHTLY_OOT_IMAGE_TAG}" >> "$GITHUB_OUTPUT"
             echo "cleanup_temp_image=false" >> "$GITHUB_OUTPUT"
             echo "manual_base_image_tag=" >> "$GITHUB_OUTPUT"
@@ -964,7 +960,7 @@ jobs:
           RUN echo "=== ATOM version AFTER installation ===" && pip show atom || true
           EOF
 
-          echo "Building manual OOT image from branch ${GITHUB_REF_NAME}"
+          echo "Manual run rebuilds OOT image from branch ${GITHUB_REF_NAME}"
 
           docker build --pull --network=host --no-cache \
             -t "${MANUAL_BASE_IMAGE_TAG}" \
