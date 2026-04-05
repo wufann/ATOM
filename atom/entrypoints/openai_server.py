@@ -12,11 +12,12 @@ import argparse
 import asyncio
 import json
 import logging
+import re
 import time
 import uuid
 from asyncio import AbstractEventLoop
 from contextlib import asynccontextmanager
-from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple
+from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple, Union
 
 import uvicorn
 from atom import SamplingParams
@@ -35,7 +36,7 @@ logger = logging.getLogger("atom")
 DEFAULT_TEMPERATURE = 1.0
 DEFAULT_TOP_K = -1
 DEFAULT_TOP_P = 1.0
-DEFAULT_MAX_TOKENS = 256
+DEFAULT_MAX_TOKENS = 8192
 CHAT_COMPLETION_OBJECT = "chat.completion"
 CHAT_COMPLETION_CHUNK_OBJECT = "chat.completion.chunk"
 TEXT_COMPLETION_OBJECT = "text_completion"
@@ -53,13 +54,26 @@ class ChatMessage(BaseModel):
     """Represents a single chat message."""
 
     role: str
-    content: str
+    content: Union[str, List[Dict[str, Any]]]
 
     model_config = ConfigDict(extra="allow")
+
+    def get_content_text(self) -> str:
+        """Extract text content, handling both string and multimodal content parts."""
+        if isinstance(self.content, str):
+            return self.content
+        # OpenAI multimodal format: [{"type": "text", "text": "..."}, ...]
+        parts = []
+        for part in self.content:
+            if isinstance(part, dict) and part.get("type") == "text":
+                parts.append(part.get("text", ""))
+        return "\n".join(parts)
 
 
 class ChatCompletionRequest(BaseModel):
     """Request model for chat completions."""
+
+    model_config = {"extra": "ignore"}
 
     model: Optional[str] = None
     messages: Optional[List[ChatMessage]] = None
@@ -86,6 +100,8 @@ class ChatCompletionRequest(BaseModel):
 
 class CompletionRequest(BaseModel):
     """Request model for text completions."""
+
+    model_config = {"extra": "ignore"}
 
     model: Optional[str] = None
     prompt: str
@@ -543,6 +559,16 @@ def cleanup_streaming_request(request_id: str, seq_id: int) -> None:
     engine.io_processor.requests.pop(seq_id, None)
 
 
+def strip_thinking(text: str) -> str:
+    """Strip <think>...</think> blocks from completed text.
+    Also strips unclosed <think>... at end of truncated responses."""
+    # Strip closed thinking blocks
+    text = re.sub(r"<think>.*?</think>\s*", "", text, flags=re.DOTALL)
+    # Strip unclosed thinking block (truncated response)
+    text = re.sub(r"<think>.*$", "", text, flags=re.DOTALL)
+    return text
+
+
 async def stream_chat_response(
     request_id: str, model: str, prompt: str, stream_queue: asyncio.Queue, seq_id: int
 ) -> AsyncGenerator[str, None]:
@@ -551,6 +577,9 @@ async def stream_chat_response(
 
     num_tokens_input = len(tokenizer.encode(prompt))
     num_tokens_output = 0
+    # Track thinking state: 0=before_think, 1=in_think, 2=after_think
+    think_state = 0
+    think_buf = ""
 
     # Send initial empty chunk
     yield create_chat_completion_chunk(request_id, model, "")
@@ -561,12 +590,40 @@ async def stream_chat_response(
 
         num_tokens_output += len(chunk_data.get("token_ids", []))
 
-        yield create_chat_completion_chunk(
-            request_id,
-            model,
-            new_text,
-            finish_reason=chunk_data.get("finish_reason"),
-        )
+        # Filter out <think>...</think> content from stream
+        finish = chunk_data.get("finish_reason")
+        if think_state == 0:
+            think_buf += new_text
+            if "<think>" in think_buf:
+                before = think_buf.split("<think>")[0]
+                if before:
+                    yield create_chat_completion_chunk(request_id, model, before)
+                think_state = 1
+                think_buf = think_buf.split("<think>", 1)[1]
+                if "</think>" in think_buf:
+                    after = think_buf.split("</think>", 1)[1].lstrip("\n")
+                    think_state = 2
+                    think_buf = ""
+                    if after:
+                        yield create_chat_completion_chunk(request_id, model, after, finish_reason=finish)
+                    elif finish:
+                        yield create_chat_completion_chunk(request_id, model, "", finish_reason=finish)
+            elif len(think_buf) > 7 and "<" not in think_buf:
+                yield create_chat_completion_chunk(request_id, model, think_buf, finish_reason=finish)
+                think_buf = ""
+        elif think_state == 1:
+            think_buf += new_text
+            if "</think>" in think_buf:
+                after = think_buf.split("</think>", 1)[1].lstrip("\n")
+                think_state = 2
+                think_buf = ""
+                if after:
+                    yield create_chat_completion_chunk(request_id, model, after, finish_reason=finish)
+                elif finish:
+                    yield create_chat_completion_chunk(request_id, model, "", finish_reason=finish)
+        else:
+            if new_text:
+                yield create_chat_completion_chunk(request_id, model, new_text, finish_reason=finish)
 
         if chunk_data.get("finished", False):
             logger.info(
@@ -676,7 +733,7 @@ async def chat_completions(request: ChatCompletionRequest):
         merged_kwargs["add_generation_prompt"] = True
 
         prompt = tokenizer.apply_chat_template(
-            [{"role": msg.role, "content": msg.content} for msg in messages],
+            [{"role": msg.role, "content": msg.get_content_text()} for msg in messages],
             **merged_kwargs,
         )
 
@@ -714,6 +771,7 @@ async def chat_completions(request: ChatCompletionRequest):
         if final_output is None:
             raise RuntimeError("No output generated")
 
+        output_text = strip_thinking(final_output["text"])
         response_data = ChatCompletionResponse(
             id=request_id,
             created=created,
@@ -721,9 +779,9 @@ async def chat_completions(request: ChatCompletionRequest):
             choices=[
                 {
                     "index": 0,
-                    "message": {"role": "assistant", "content": final_output["text"]},
+                    "message": {"role": "assistant", "content": output_text},
                     "finish_reason": final_output["finish_reason"],
-                    "text": final_output["text"],
+                    "text": output_text,
                 }
             ],
             usage={
