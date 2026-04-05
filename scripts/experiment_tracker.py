@@ -5,6 +5,7 @@ Experiment progress tracker with Pareto frontier analysis.
 Maintains structured state across optimization iterations,
 detects Pareto improvements, and generates status files.
 """
+
 from __future__ import annotations
 
 import json
@@ -313,18 +314,14 @@ class ExperimentTracker:
             if not dominated:
                 new_frontier.append(p)
 
-        self.state.pareto_frontier = sorted(
-            new_frontier, key=lambda x: x["throughput"]
-        )
+        self.state.pareto_frontier = sorted(new_frontier, key=lambda x: x["throughput"])
         return len(new_frontier) != len(old_frontier) or any(
             p not in old_frontier for p in new_frontier
         )
 
     def get_pareto_shift(self) -> dict:
         """Compare current frontier to baseline, return shift metrics."""
-        baseline_pts = [
-            r for r in self.state.baseline_results
-        ]
+        baseline_pts = [r for r in self.state.baseline_results]
         current_pts = self.state.pareto_frontier
         if not baseline_pts or not current_pts:
             return {"shift": "no_data"}
@@ -410,8 +407,8 @@ class ExperimentTracker:
         elapsed_str = f"{elapsed/3600:.1f}h" if elapsed > 3600 else f"{elapsed/60:.0f}m"
 
         lines = [
-            f"# Experiment Status",
-            f"",
+            "# Experiment Status",
+            "",
             f"**Phase**: `{s.phase}`  ",
             f"**Progress**: {self.progress_pct:.0f}% "
             f"({s.completed_benchmarks}/{s.total_planned_benchmarks} benchmarks)  ",
@@ -421,20 +418,18 @@ class ExperimentTracker:
             f"**Machine**: `{s.machine}`  ",
             f"**Branch**: `{s.branch}`  ",
             f"**Last Updated**: {time.strftime('%Y-%m-%d %H:%M:%S')}  ",
-            f"",
+            "",
         ]
 
         if s.suggest_stop:
             lines += [f"> **SUGGEST STOP**: {s.stop_reason}", ""]
 
         if s.current_optimization:
-            lines += [f"## Current Optimization", f"`{s.current_optimization}`", ""]
+            lines += ["## Current Optimization", f"`{s.current_optimization}`", ""]
 
         if s.best_results:
             lines += ["## Best Results", ""]
-            lines.append(
-                "| Scenario | Throughput | TTFT mean | TPOT mean | Label |"
-            )
+            lines.append("| Scenario | Throughput | TTFT mean | TPOT mean | Label |")
             lines.append("|---|---|---|---|---|")
             for k, r in sorted(s.best_results.items()):
                 lines.append(
@@ -526,7 +521,9 @@ class ExperimentTracker:
 
         text.append("")
         if s.events:
-            text.append(f"Latest: [{s.events[-1]['time_str']}] {s.events[-1]['message']}")
+            text.append(
+                f"Latest: [{s.events[-1]['time_str']}] {s.events[-1]['message']}"
+            )
 
         (self.state_dir / "latest_summary.txt").write_text("\n".join(text))
 
@@ -536,12 +533,8 @@ class ExperimentTracker:
         """Build a structured notification payload for external dispatch."""
         s = self.state
         shift = self.get_pareto_shift()
-        best_tput = max(
-            (r["throughput"] for r in s.best_results.values()), default=0
-        )
-        best_tpot = min(
-            (r["tpot_mean"] for r in s.best_results.values()), default=0
-        )
+        best_tput = max((r["throughput"] for r in s.best_results.values()), default=0)
+        best_tpot = min((r["tpot_mean"] for r in s.best_results.values()), default=0)
 
         return {
             "event_type": event["type"],

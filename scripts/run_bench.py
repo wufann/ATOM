@@ -3,6 +3,7 @@
 GPT-OSS-120B MI355X Performance Benchmark Suite
 with integrated experiment tracking and notification.
 """
+
 from __future__ import annotations
 
 import subprocess
@@ -123,9 +124,7 @@ def _parse_result(
             return BenchResult(
                 scenario=scenario,
                 concurrency=conc,
-                throughput=d.get(
-                    "output_throughput", d.get("request_throughput", 0)
-                ),
+                throughput=d.get("output_throughput", d.get("request_throughput", 0)),
                 ttft_mean=d.get("mean_ttft_ms", 0),
                 ttft_p99=d.get("p99_ttft_ms", 0),
                 tpot_mean=d.get("mean_tpot_ms", 0),
@@ -145,7 +144,9 @@ def _parse_result(
             ttft_p99 = re.search(r"P99 TTFT.*?(\d+\.?\d*)", text)
             tpot_mean = re.search(r"Mean TPOT.*?(\d+\.?\d*)", text)
             tpot_p99 = re.search(r"P99 TPOT.*?(\d+\.?\d*)", text)
-            if all(v is not None for v in [tput, ttft_mean, ttft_p99, tpot_mean, tpot_p99]):
+            if all(
+                v is not None for v in [tput, ttft_mean, ttft_p99, tpot_mean, tpot_p99]
+            ):
                 return BenchResult(
                     scenario=scenario,
                     concurrency=conc,
@@ -255,9 +256,9 @@ def main():
 
     print("\nAll benchmarks complete")
     print(f"Status files at: {STATE_DIR}/")
-    print(f"  - STATUS.md")
-    print(f"  - progress.json")
-    print(f"  - latest_summary.txt")
+    print("  - STATUS.md")
+    print("  - progress.json")
+    print("  - latest_summary.txt")
 
 
 if __name__ == "__main__":

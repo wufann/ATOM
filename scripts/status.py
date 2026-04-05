@@ -20,6 +20,7 @@ Usage:
     python status.py --section events
     python status.py --section optimizations
 """
+
 from __future__ import annotations
 
 import argparse
@@ -29,7 +30,6 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-
 
 DEFAULT_STATE_DIR = "/app/experiment_status"
 LOCAL_CACHE_DIR = Path("experiment_status_cache")
@@ -46,9 +46,7 @@ def fetch_remote(host: str, container: str, remote_dir: str) -> dict:
         if r.returncode == 0 and r.stdout.strip():
             data = json.loads(r.stdout)
             LOCAL_CACHE_DIR.mkdir(exist_ok=True)
-            (LOCAL_CACHE_DIR / "progress.json").write_text(
-                json.dumps(data, indent=2)
-            )
+            (LOCAL_CACHE_DIR / "progress.json").write_text(json.dumps(data, indent=2))
             return data
     except Exception as e:
         print(f"[warn] Remote fetch failed: {e}", file=sys.stderr)
@@ -200,9 +198,7 @@ def print_full(data: dict):
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Query ATOM experiment status"
-    )
+    parser = argparse.ArgumentParser(description="Query ATOM experiment status")
     parser.add_argument(
         "--dir",
         default=DEFAULT_STATE_DIR,

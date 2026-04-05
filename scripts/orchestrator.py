@@ -8,12 +8,12 @@ Strategy: targeted experiments, not full scan.
 - Compare to baseline at key points, skip full sweep
 - Early stop if improvement < threshold
 """
+
 from __future__ import annotations
 
 import json
 import os
 import re
-import signal
 import subprocess
 import sys
 import threading
@@ -41,26 +41,134 @@ STATE_DIR = os.environ.get("EXPERIMENT_STATE_DIR", "/app/experiment_status")
 RESULTS_BASE = "/app/benchmark_results"
 
 BASELINE_1K = {
-    1: {"throughput": 272.8, "ttft_mean": 40.1, "ttft_p99": 54.2, "tpot_mean": 3.6, "tpot_p99": 3.6},
-    2: {"throughput": 522.4, "ttft_mean": 32.7, "ttft_p99": 69.1, "tpot_mean": 3.7, "tpot_p99": 3.8},
-    4: {"throughput": 937.3, "ttft_mean": 35.8, "ttft_p99": 80.0, "tpot_mean": 4.1, "tpot_p99": 4.2},
-    8: {"throughput": 1566.6, "ttft_mean": 41.5, "ttft_p99": 126.3, "tpot_mean": 5.0, "tpot_p99": 5.2},
-    16: {"throughput": 2484.2, "ttft_mean": 53.4, "ttft_p99": 213.4, "tpot_mean": 6.3, "tpot_p99": 6.7},
-    32: {"throughput": 3868.4, "ttft_mean": 104.4, "ttft_p99": 785.2, "tpot_mean": 8.0, "tpot_p99": 8.4},
-    64: {"throughput": 6059.7, "ttft_mean": 99.2, "ttft_p99": 794.4, "tpot_mean": 10.2, "tpot_p99": 11.1},
-    128: {"throughput": 8979.9, "ttft_mean": 136.2, "ttft_p99": 1361.3, "tpot_mean": 13.8, "tpot_p99": 14.5},
-    256: {"throughput": 12022.6, "ttft_mean": 1042.4, "ttft_p99": 9194.4, "tpot_mean": 19.9, "tpot_p99": 29.1},
+    1: {
+        "throughput": 272.8,
+        "ttft_mean": 40.1,
+        "ttft_p99": 54.2,
+        "tpot_mean": 3.6,
+        "tpot_p99": 3.6,
+    },
+    2: {
+        "throughput": 522.4,
+        "ttft_mean": 32.7,
+        "ttft_p99": 69.1,
+        "tpot_mean": 3.7,
+        "tpot_p99": 3.8,
+    },
+    4: {
+        "throughput": 937.3,
+        "ttft_mean": 35.8,
+        "ttft_p99": 80.0,
+        "tpot_mean": 4.1,
+        "tpot_p99": 4.2,
+    },
+    8: {
+        "throughput": 1566.6,
+        "ttft_mean": 41.5,
+        "ttft_p99": 126.3,
+        "tpot_mean": 5.0,
+        "tpot_p99": 5.2,
+    },
+    16: {
+        "throughput": 2484.2,
+        "ttft_mean": 53.4,
+        "ttft_p99": 213.4,
+        "tpot_mean": 6.3,
+        "tpot_p99": 6.7,
+    },
+    32: {
+        "throughput": 3868.4,
+        "ttft_mean": 104.4,
+        "ttft_p99": 785.2,
+        "tpot_mean": 8.0,
+        "tpot_p99": 8.4,
+    },
+    64: {
+        "throughput": 6059.7,
+        "ttft_mean": 99.2,
+        "ttft_p99": 794.4,
+        "tpot_mean": 10.2,
+        "tpot_p99": 11.1,
+    },
+    128: {
+        "throughput": 8979.9,
+        "ttft_mean": 136.2,
+        "ttft_p99": 1361.3,
+        "tpot_mean": 13.8,
+        "tpot_p99": 14.5,
+    },
+    256: {
+        "throughput": 12022.6,
+        "ttft_mean": 1042.4,
+        "ttft_p99": 9194.4,
+        "tpot_mean": 19.9,
+        "tpot_p99": 29.1,
+    },
 }
 BASELINE_8K = {
-    1: {"throughput": 263.1, "ttft_mean": 119.7, "ttft_p99": 130.5, "tpot_mean": 3.7, "tpot_p99": 3.7},
-    2: {"throughput": 494.3, "ttft_mean": 119.4, "ttft_p99": 205.2, "tpot_mean": 3.9, "tpot_p99": 3.9},
-    4: {"throughput": 856.1, "ttft_mean": 130.6, "ttft_p99": 357.7, "tpot_mean": 4.4, "tpot_p99": 4.5},
-    8: {"throughput": 1384.4, "ttft_mean": 159.8, "ttft_p99": 679.5, "tpot_mean": 5.5, "tpot_p99": 5.9},
-    16: {"throughput": 1989.0, "ttft_mean": 275.9, "ttft_p99": 1410.3, "tpot_mean": 7.6, "tpot_p99": 9.9},
-    32: {"throughput": 2858.7, "ttft_mean": 286.0, "ttft_p99": 2587.3, "tpot_mean": 10.6, "tpot_p99": 11.9},
-    64: {"throughput": 3873.6, "ttft_mean": 451.6, "ttft_p99": 5169.6, "tpot_mean": 15.8, "tpot_p99": 18.9},
-    128: {"throughput": 4723.5, "ttft_mean": 805.5, "ttft_p99": 10332.9, "tpot_mean": 25.8, "tpot_p99": 34.0},
-    256: {"throughput": 5484.8, "ttft_mean": 2599.9, "ttft_p99": 21740.8, "tpot_mean": 43.3, "tpot_p99": 56.8},
+    1: {
+        "throughput": 263.1,
+        "ttft_mean": 119.7,
+        "ttft_p99": 130.5,
+        "tpot_mean": 3.7,
+        "tpot_p99": 3.7,
+    },
+    2: {
+        "throughput": 494.3,
+        "ttft_mean": 119.4,
+        "ttft_p99": 205.2,
+        "tpot_mean": 3.9,
+        "tpot_p99": 3.9,
+    },
+    4: {
+        "throughput": 856.1,
+        "ttft_mean": 130.6,
+        "ttft_p99": 357.7,
+        "tpot_mean": 4.4,
+        "tpot_p99": 4.5,
+    },
+    8: {
+        "throughput": 1384.4,
+        "ttft_mean": 159.8,
+        "ttft_p99": 679.5,
+        "tpot_mean": 5.5,
+        "tpot_p99": 5.9,
+    },
+    16: {
+        "throughput": 1989.0,
+        "ttft_mean": 275.9,
+        "ttft_p99": 1410.3,
+        "tpot_mean": 7.6,
+        "tpot_p99": 9.9,
+    },
+    32: {
+        "throughput": 2858.7,
+        "ttft_mean": 286.0,
+        "ttft_p99": 2587.3,
+        "tpot_mean": 10.6,
+        "tpot_p99": 11.9,
+    },
+    64: {
+        "throughput": 3873.6,
+        "ttft_mean": 451.6,
+        "ttft_p99": 5169.6,
+        "tpot_mean": 15.8,
+        "tpot_p99": 18.9,
+    },
+    128: {
+        "throughput": 4723.5,
+        "ttft_mean": 805.5,
+        "ttft_p99": 10332.9,
+        "tpot_mean": 25.8,
+        "tpot_p99": 34.0,
+    },
+    256: {
+        "throughput": 5484.8,
+        "ttft_mean": 2599.9,
+        "ttft_p99": 21740.8,
+        "tpot_mean": 43.3,
+        "tpot_p99": 56.8,
+    },
 }
 
 IMPROVEMENT_THRESHOLD = 0.02  # 2% minimum to count as improvement
@@ -69,13 +177,16 @@ HEARTBEAT_INTERVAL = 600  # 10 minutes
 
 # ── experiment definitions ───────────────────────────────────────
 
+
 @dataclass
 class ExperimentConfig:
     name: str
     description: str
     server_args: list[str]
     env_vars: dict[str, str]
-    test_points: list[tuple[str, int, int, int]]  # (scenario_name, isl, osl, concurrency)
+    test_points: list[
+        tuple[str, int, int, int]
+    ]  # (scenario_name, isl, osl, concurrency)
     reason: str
     expected_impact: str
     priority: int  # 1=highest
@@ -104,12 +215,13 @@ def build_experiment_plan() -> list[ExperimentConfig]:
         "--server-port=8080",
     ]
 
-    key_1k = [(f"1k_1k", 1024, 1024, c) for c in [1, 32, 64, 128, 256]]
-    key_8k = [(f"8k_1k", 8192, 1024, c) for c in [1, 64, 128, 256]]
-    high_conc_1k = [(f"1k_1k", 1024, 1024, c) for c in [32, 64, 128, 256]]
-    high_conc_8k = [(f"8k_1k", 8192, 1024, c) for c in [64, 128, 256]]
-    ttft_critical = [(f"1k_1k", 1024, 1024, c) for c in [128, 256]] + \
-                    [(f"8k_1k", 8192, 1024, c) for c in [64, 128, 256]]
+    [("1k_1k", 1024, 1024, c) for c in [1, 32, 64, 128, 256]]
+    [("8k_1k", 8192, 1024, c) for c in [1, 64, 128, 256]]
+    high_conc_1k = [("1k_1k", 1024, 1024, c) for c in [32, 64, 128, 256]]
+    high_conc_8k = [("8k_1k", 8192, 1024, c) for c in [64, 128, 256]]
+    ttft_critical = [("1k_1k", 1024, 1024, c) for c in [128, 256]] + [
+        ("8k_1k", 8192, 1024, c) for c in [64, 128, 256]
+    ]
 
     return [
         ExperimentConfig(
@@ -119,38 +231,53 @@ def build_experiment_plan() -> list[ExperimentConfig]:
             env_vars={"AITER_LOG_LEVEL": "WARNING"},
             test_points=high_conc_1k + high_conc_8k,
             reason="More KV blocks = more concurrent sequences = higher throughput at high concurrency. "
-                   "TTFT at c256 is our worst metric; more KV capacity helps.",
+            "TTFT at c256 is our worst metric; more KV capacity helps.",
             expected_impact="Throughput +3-8% at c128/c256, TTFT improvement at high conc",
             priority=1,
         ),
         ExperimentConfig(
             name="cudagraph_dense",
             description="Denser CUDAGraph capture via CLI: add sizes 3,6,12,24",
-            server_args=base_server + [
+            server_args=base_server
+            + [
                 "--gpu-memory-utilization=0.9",
                 "--cudagraph-capture-sizes",
-                "1", "2", "3", "4", "6", "8", "12", "16", "24",
-                "32", "48", "64", "128", "256", "512",
+                "1",
+                "2",
+                "3",
+                "4",
+                "6",
+                "8",
+                "12",
+                "16",
+                "24",
+                "32",
+                "48",
+                "64",
+                "128",
+                "256",
+                "512",
             ],
             env_vars={"AITER_LOG_LEVEL": "WARNING"},
-            test_points=[(f"1k_1k", 1024, 1024, c) for c in [1, 4, 8, 32]] + \
-                        [(f"8k_1k", 8192, 1024, c) for c in [1, 8]],
+            test_points=[("1k_1k", 1024, 1024, c) for c in [1, 4, 8, 32]]
+            + [("8k_1k", 8192, 1024, c) for c in [1, 8]],
             reason="At low batch sizes (3,5,6,7,...), current sizes cause padding to next power-of-2. "
-                   "Dense sizes reduce decode padding waste.",
+            "Dense sizes reduce decode padding waste.",
             expected_impact="TPOT -2-5% at low concurrency, negligible at high conc",
             priority=2,
         ),
         ExperimentConfig(
             name="max_batch_tokens_8k",
             description="Reduce max_num_batched_tokens 16384->8192 for faster prefill/decode switching",
-            server_args=base_server + [
+            server_args=base_server
+            + [
                 "--gpu-memory-utilization=0.9",
                 "--max-num-batched-tokens=8192",
             ],
             env_vars={"AITER_LOG_LEVEL": "WARNING"},
             test_points=ttft_critical,
             reason="Smaller prefill batches = decode steps happen sooner = lower TTFT at high concurrency. "
-                   "Trade: slightly lower peak throughput for much better TTFT.",
+            "Trade: slightly lower peak throughput for much better TTFT.",
             expected_impact="TTFT -15-30% at c128/c256, throughput -3-5%",
             priority=2,
         ),
@@ -162,23 +289,25 @@ def build_experiment_plan() -> list[ExperimentConfig]:
                 "AITER_LOG_LEVEL": "WARNING",
                 "ATOM_DUAL_STREAM_MOE_TOKEN_THRESHOLD": "512",
             },
-            test_points=high_conc_1k[:2] + high_conc_8k[:1],  # Quick probe: c32,c64 for 1k; c64 for 8k
+            test_points=high_conc_1k[:2]
+            + high_conc_8k[:1],  # Quick probe: c32,c64 for 1k; c64 for 8k
             reason="GPT-OSS-120B is MoE. Dual-stream dispatch threshold affects MoE kernel efficiency. "
-                   "512 vs 1024 may better match typical decode batch sizes.",
+            "512 vs 1024 may better match typical decode batch sizes.",
             expected_impact="Throughput +1-5% if threshold matches workload better",
             priority=3,
         ),
         ExperimentConfig(
             name="block_size_32",
             description="Double KV cache block size 16->32 to reduce metadata overhead",
-            server_args=base_server + [
+            server_args=base_server
+            + [
                 "--gpu-memory-utilization=0.9",
                 "--block-size=32",
             ],
             env_vars={"AITER_LOG_LEVEL": "WARNING"},
             test_points=high_conc_1k[:2] + high_conc_8k[:1],  # Quick probe
             reason="Larger blocks = fewer block table entries = less metadata overhead per token. "
-                   "May slightly improve memory access patterns.",
+            "May slightly improve memory access patterns.",
             expected_impact="TPOT -1-3%, possible TTFT improvement from faster allocation",
             priority=3,
         ),
@@ -187,10 +316,15 @@ def build_experiment_plan() -> list[ExperimentConfig]:
 
 # ── server management ────────────────────────────────────────────
 
+
 def stop_server():
     print("[server] Stopping all Python processes...")
     subprocess.run(
-        ["bash", "-c", "pkill -f 'atom.entrypoints' 2>/dev/null; sleep 2; pkill -9 -f 'atom.entrypoints' 2>/dev/null"],
+        [
+            "bash",
+            "-c",
+            "pkill -f 'atom.entrypoints' 2>/dev/null; sleep 2; pkill -9 -f 'atom.entrypoints' 2>/dev/null",
+        ],
         timeout=15,
     )
     time.sleep(3)
@@ -214,6 +348,7 @@ def start_server(args: list[str], env_vars: dict[str, str], log_file: str) -> bo
         time.sleep(5)
         try:
             import urllib.request
+
             req = urllib.request.Request(f"{BASE_URL}/health")
             with urllib.request.urlopen(req, timeout=5) as resp:
                 if resp.status == 200:
@@ -230,6 +365,7 @@ def start_server(args: list[str], env_vars: dict[str, str], log_file: str) -> bo
 def check_server_health() -> bool:
     try:
         import urllib.request
+
         req = urllib.request.Request(f"{BASE_URL}/health")
         with urllib.request.urlopen(req, timeout=5) as resp:
             return resp.status == 200
@@ -239,9 +375,14 @@ def check_server_health() -> bool:
 
 # ── benchmark execution ──────────────────────────────────────────
 
+
 def run_single_benchmark(
-    isl: int, osl: int, conc: int, scenario: str,
-    results_dir: str, label: str,
+    isl: int,
+    osl: int,
+    conc: int,
+    scenario: str,
+    results_dir: str,
+    label: str,
 ) -> BenchResult | None:
     num_prompts = max(conc * 10, 32)
     result_file = f"{scenario}_c{conc}.json"
@@ -249,15 +390,23 @@ def run_single_benchmark(
     print(f"  [{time.strftime('%H:%M:%S')}] {scenario} c={conc} prompts={num_prompts}")
 
     cmd = [
-        sys.executable, "-m", "atom.benchmarks.benchmark_serving",
-        f"--model={MODEL}", "--backend=vllm", f"--base-url={BASE_URL}",
+        sys.executable,
+        "-m",
+        "atom.benchmarks.benchmark_serving",
+        f"--model={MODEL}",
+        "--backend=vllm",
+        f"--base-url={BASE_URL}",
         "--dataset-name=random",
-        f"--random-input-len={isl}", f"--random-output-len={osl}",
+        f"--random-input-len={isl}",
+        f"--random-output-len={osl}",
         "--random-range-ratio=0.8",
-        f"--num-prompts={num_prompts}", f"--max-concurrency={conc}",
-        "--request-rate=inf", "--ignore-eos",
+        f"--num-prompts={num_prompts}",
+        f"--max-concurrency={conc}",
+        "--request-rate=inf",
+        "--ignore-eos",
         "--percentile-metrics=ttft,tpot,itl,e2el",
-        f"--result-dir={results_dir}", f"--result-filename={result_file}",
+        f"--result-dir={results_dir}",
+        f"--result-filename={result_file}",
     ]
 
     try:
@@ -275,7 +424,9 @@ def run_single_benchmark(
     return _parse_result(results_dir, scenario, conc, label)
 
 
-def _parse_result(results_dir: str, scenario: str, conc: int, label: str) -> BenchResult | None:
+def _parse_result(
+    results_dir: str, scenario: str, conc: int, label: str
+) -> BenchResult | None:
     json_file = f"{results_dir}/{scenario}_c{conc}.json"
     stdout_file = f"{results_dir}/{scenario}_c{conc}.stdout"
 
@@ -283,11 +434,15 @@ def _parse_result(results_dir: str, scenario: str, conc: int, label: str) -> Ben
         try:
             d = json.load(open(json_file))
             return BenchResult(
-                scenario=scenario, concurrency=conc,
+                scenario=scenario,
+                concurrency=conc,
                 throughput=d.get("output_throughput", d.get("request_throughput", 0)),
-                ttft_mean=d.get("mean_ttft_ms", 0), ttft_p99=d.get("p99_ttft_ms", 0),
-                tpot_mean=d.get("mean_tpot_ms", 0), tpot_p99=d.get("p99_tpot_ms", 0),
-                timestamp=time.time(), label=label,
+                ttft_mean=d.get("mean_ttft_ms", 0),
+                ttft_p99=d.get("p99_ttft_ms", 0),
+                tpot_mean=d.get("mean_tpot_ms", 0),
+                tpot_p99=d.get("p99_tpot_ms", 0),
+                timestamp=time.time(),
+                label=label,
             )
         except Exception:
             pass
@@ -300,13 +455,19 @@ def _parse_result(results_dir: str, scenario: str, conc: int, label: str) -> Ben
             ttft_p99 = re.search(r"P99 TTFT.*?(\d+\.?\d*)", text)
             tpot_mean = re.search(r"Mean TPOT.*?(\d+\.?\d*)", text)
             tpot_p99 = re.search(r"P99 TPOT.*?(\d+\.?\d*)", text)
-            if all(v is not None for v in [tput, ttft_mean, ttft_p99, tpot_mean, tpot_p99]):
+            if all(
+                v is not None for v in [tput, ttft_mean, ttft_p99, tpot_mean, tpot_p99]
+            ):
                 return BenchResult(
-                    scenario=scenario, concurrency=conc,
-                    throughput=float(tput.group(1)), ttft_mean=float(ttft_mean.group(1)),
-                    ttft_p99=float(ttft_p99.group(1)), tpot_mean=float(tpot_mean.group(1)),
+                    scenario=scenario,
+                    concurrency=conc,
+                    throughput=float(tput.group(1)),
+                    ttft_mean=float(ttft_mean.group(1)),
+                    ttft_p99=float(ttft_p99.group(1)),
+                    tpot_mean=float(tpot_mean.group(1)),
                     tpot_p99=float(tpot_p99.group(1)),
-                    timestamp=time.time(), label=label,
+                    timestamp=time.time(),
+                    label=label,
                 )
         except Exception:
             pass
@@ -314,6 +475,7 @@ def _parse_result(results_dir: str, scenario: str, conc: int, label: str) -> Ben
 
 
 # ── comparison logic ─────────────────────────────────────────────
+
 
 def get_baseline(scenario: str, conc: int) -> dict | None:
     tbl = BASELINE_1K if "1k_1k" in scenario else BASELINE_8K
@@ -332,11 +494,13 @@ def compute_improvement(result: BenchResult) -> dict:
         "throughput_pct": tput_delta * 100,
         "tpot_pct": tpot_delta * 100,
         "ttft_pct": ttft_delta * 100,
-        "is_pareto_improving": tput_delta > IMPROVEMENT_THRESHOLD or tpot_delta > IMPROVEMENT_THRESHOLD,
+        "is_pareto_improving": tput_delta > IMPROVEMENT_THRESHOLD
+        or tpot_delta > IMPROVEMENT_THRESHOLD,
     }
 
 
 # ── heartbeat ────────────────────────────────────────────────────
+
 
 class HeartbeatThread(threading.Thread):
     def __init__(self, tracker: ExperimentTracker, notifier: Notifier):
@@ -350,7 +514,7 @@ class HeartbeatThread(threading.Thread):
             evt = {
                 "type": "heartbeat",
                 "message": f"Alive — phase: {self.tracker.state.phase}, "
-                           f"progress: {self.tracker.progress_pct:.0f}%",
+                f"progress: {self.tracker.progress_pct:.0f}%",
                 "timestamp": time.time(),
                 "time_str": time.strftime("%Y-%m-%d %H:%M:%S"),
                 "progress_pct": self.tracker.progress_pct,
@@ -364,6 +528,7 @@ class HeartbeatThread(threading.Thread):
 
 
 # ── main orchestration ───────────────────────────────────────────
+
 
 def main():
     os.makedirs(STATE_DIR, exist_ok=True)
@@ -395,13 +560,25 @@ def main():
 
     # Seed baseline into tracker
     for conc, data in BASELINE_1K.items():
-        tracker.record_benchmark(BenchResult(
-            scenario="1k_1k", concurrency=conc, label="baseline", **data,
-        ), is_baseline=True)
+        tracker.record_benchmark(
+            BenchResult(
+                scenario="1k_1k",
+                concurrency=conc,
+                label="baseline",
+                **data,
+            ),
+            is_baseline=True,
+        )
     for conc, data in BASELINE_8K.items():
-        tracker.record_benchmark(BenchResult(
-            scenario="8k_1k", concurrency=conc, label="baseline", **data,
-        ), is_baseline=True)
+        tracker.record_benchmark(
+            BenchResult(
+                scenario="8k_1k",
+                concurrency=conc,
+                label="baseline",
+                **data,
+            ),
+            is_baseline=True,
+        )
 
     tracker.gpu_start()
     tracker.emit_custom(
@@ -449,7 +626,9 @@ def main():
 
         if not server_ok:
             tracker.finish_optimization(exp.name, "failed", "Server failed to start")
-            tracker.emit_custom(EventType.SERVER_FAILED, f"Server failed for {exp.name}")
+            tracker.emit_custom(
+                EventType.SERVER_FAILED, f"Server failed for {exp.name}"
+            )
             continue
 
         tracker.emit_custom(EventType.SERVER_STARTED, f"Server ready for {exp.name}")
@@ -462,7 +641,9 @@ def main():
         any_pareto_gain = False
 
         for scenario, isl, osl, conc in exp.test_points:
-            result = run_single_benchmark(isl, osl, conc, scenario, results_dir, exp.label)
+            result = run_single_benchmark(
+                isl, osl, conc, scenario, results_dir, exp.label
+            )
             if result:
                 tracker.record_benchmark(result)
                 imp = compute_improvement(result)
@@ -482,7 +663,9 @@ def main():
                         any_pareto_gain = True
 
         # Batch done — evaluate
-        n_improved = sum(1 for _, _, imp, _ in improvements if imp.get("is_pareto_improving"))
+        n_improved = sum(
+            1 for _, _, imp, _ in improvements if imp.get("is_pareto_improving")
+        )
         total_pts = len(improvements)
 
         tracker.record_batch_done(exp.name, total_pts)
@@ -492,12 +675,21 @@ def main():
             winners.append(exp)
             # Merge winning config into combined
             for arg in exp.server_args:
-                if arg not in combined_server_args and "--server-port" not in arg and "--model" not in arg and "--kv_cache_dtype" not in arg:
+                if (
+                    arg not in combined_server_args
+                    and "--server-port" not in arg
+                    and "--model" not in arg
+                    and "--kv_cache_dtype" not in arg
+                ):
                     combined_server_args.append(arg)
             combined_env.update(exp.env_vars)
-            print(f"\n  >> WINNER: {exp.name} — {n_improved}/{total_pts} points improved")
+            print(
+                f"\n  >> WINNER: {exp.name} — {n_improved}/{total_pts} points improved"
+            )
         else:
-            tracker.finish_optimization(exp.name, "failed", f"No Pareto improvement ({n_improved}/{total_pts})")
+            tracker.finish_optimization(
+                exp.name, "failed", f"No Pareto improvement ({n_improved}/{total_pts})"
+            )
             print(f"\n  >> NO IMPROVEMENT: {exp.name} — skipping")
 
         # Early stop check
@@ -516,13 +708,11 @@ def main():
 
         tracker.set_phase(Phase.FINAL_BENCH, "Combined best config")
 
-        all_key_points = [
-            ("1k_1k", 1024, 1024, c) for c in [1, 32, 64, 128, 256]
-        ] + [
+        all_key_points = [("1k_1k", 1024, 1024, c) for c in [1, 32, 64, 128, 256]] + [
             ("8k_1k", 8192, 1024, c) for c in [1, 64, 128, 256]
         ]
 
-        log_file = f"/app/server_combined.log"
+        log_file = "/app/server_combined.log"
         server_ok = start_server(combined_server_args, combined_env, log_file)
 
         if server_ok:
@@ -530,7 +720,9 @@ def main():
             os.makedirs(results_dir, exist_ok=True)
 
             for scenario, isl, osl, conc in all_key_points:
-                result = run_single_benchmark(isl, osl, conc, scenario, results_dir, "combined")
+                result = run_single_benchmark(
+                    isl, osl, conc, scenario, results_dir, "combined"
+                )
                 if result:
                     tracker.record_benchmark(result)
                     imp = compute_improvement(result)
@@ -558,9 +750,15 @@ def main():
     print("FINAL PARETO FRONTIER REPORT")
     print(f"{'='*70}")
 
-    print(f"\nBaseline max throughput: {shift.get('baseline_max_throughput', 0):.0f} tok/s")
-    print(f"Current max throughput:  {shift.get('current_max_throughput', 0):.0f} tok/s")
-    print(f"Throughput improvement:  {shift.get('throughput_improvement_pct', 0):+.1f}%")
+    print(
+        f"\nBaseline max throughput: {shift.get('baseline_max_throughput', 0):.0f} tok/s"
+    )
+    print(
+        f"Current max throughput:  {shift.get('current_max_throughput', 0):.0f} tok/s"
+    )
+    print(
+        f"Throughput improvement:  {shift.get('throughput_improvement_pct', 0):+.1f}%"
+    )
     print(f"\nBaseline min TPOT: {shift.get('baseline_min_tpot', 0):.1f} ms")
     print(f"Current min TPOT:  {shift.get('current_min_tpot', 0):.1f} ms")
     print(f"TPOT improvement:  {shift.get('tpot_improvement_pct', 0):+.1f}%")
@@ -572,7 +770,7 @@ def main():
         print("No optimizations improved the Pareto frontier.")
 
     # Print best results per scenario
-    print(f"\n--- Best Results by Scenario ---")
+    print("\n--- Best Results by Scenario ---")
     for key, res in sorted(tracker.state.best_results.items()):
         bl = get_baseline(res["scenario"], res["concurrency"])
         bl_tput = bl["throughput"] if bl else 0

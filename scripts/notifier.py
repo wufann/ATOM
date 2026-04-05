@@ -5,6 +5,7 @@ Multi-channel notification dispatcher for experiment events.
 Supports: Slack, Discord, Telegram, ntfy, Pushover, generic webhook, local file log.
 Configure via environment variables or notify_config.json.
 """
+
 from __future__ import annotations
 
 import json
@@ -14,7 +15,6 @@ import urllib.request
 import urllib.error
 from pathlib import Path
 from typing import Optional
-
 
 CONFIG_FILE = "notify_config.json"
 DEFAULT_CONFIG = {
