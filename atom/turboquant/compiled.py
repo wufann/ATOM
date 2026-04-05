@@ -6,7 +6,6 @@ For maximum performance, use Baybridge/FlyDSL kernels (Phase 2b).
 """
 
 import torch
-import torch.nn.functional as F
 
 
 @torch.compile(mode="reduce-overhead", fullgraph=True)

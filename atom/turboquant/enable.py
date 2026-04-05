@@ -17,10 +17,10 @@ import sys
 
 os.environ["ATOM_TURBOQUANT"] = "1"
 
-from atom.turboquant.kv_hook import enable_turboquant
+from atom.turboquant.kv_hook import enable_turboquant  # noqa: E402
 
 enable_turboquant()
 
 sys.argv[0] = "atom/entrypoints/openai_server.py"
-from atom.entrypoints.openai_server import main
+from atom.entrypoints.openai_server import main  # noqa: E402
 main()

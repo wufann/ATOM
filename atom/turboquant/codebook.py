@@ -38,7 +38,8 @@ def solve_lloyd_max(
     """
     n_levels = 1 << bits
     sigma = 1.0 / math.sqrt(d)
-    pdf = lambda x: _gaussian_pdf(x, sigma)
+    def pdf(x):
+        return _gaussian_pdf(x, sigma)
 
     lo, hi = -3.5 * sigma, 3.5 * sigma
     centroids = [lo + (hi - lo) * (i + 0.5) / n_levels for i in range(n_levels)]

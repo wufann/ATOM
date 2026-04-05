@@ -31,7 +31,6 @@ def enable_turboquant():
     Monkey-patch ATOM's DeepseekV2Model to add TurboQuant KV cache
     compression hooks. Call before ATOM starts.
     """
-    import torch
     from atom.models.deepseek_v2 import DeepseekV2Model, DeepseekV2DecoderLayer
     from atom.turboquant.engine import TurboQuantEngine
 
