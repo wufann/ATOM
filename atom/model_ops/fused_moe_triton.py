@@ -24,6 +24,7 @@ import triton.language as tl
 from typing import Any
 import logging
 from math import prod
+from aiter import ActivationType
 from aiter.jit.utils.chip_info import get_gfx
 from atom.model_ops.utils import has_triton_kernels
 
@@ -45,6 +46,7 @@ def _silu_mul_fn(input):
 
 if has_triton_kernels():
     try:
+        import triton_kernels.swiglu
         from triton_kernels.matmul_ogs import (
             FnSpecs,
             FusedActivation,
@@ -235,6 +237,16 @@ def triton_kernel_fused_experts(
 
     half_N = N // 2
 
+    if intermediate_cache is None:
+        intermediate_cache = torch.empty(
+            (batch_dim, M * topk, half_N),
+            device=hidden_states.device,
+            dtype=hidden_states.dtype,
+        )
+
+    intermediate_cache = _resize_cache(
+        intermediate_cache, (batch_dim, M * topk, half_N)
+    )
     output_tensor = _resize_cache(output_tensor, (batch_dim, M, K))
 
     gammas = routing_data.gate_scal if routing_data else None
@@ -251,27 +263,44 @@ def triton_kernel_fused_experts(
         update_opt_flags_constraints({"block_m": 128, "block_n": 256})
 
     try:
-        # W1 matmul: auto-allocate output (y=None)
-        raw_intermediate = matmul_ogs(
-            hidden_states,
-            w1,
-            w1_bias,
-            routing_data,
-            gather_indx=gather_indx,
-            precision_config=w13_precision_config,
-            gammas=gammas if apply_router_weight_on_input else None,
-        )
-
-        # Manual SiLU activation: weights are concatenated [gate | up]
-        raw_2d = raw_intermediate.view(M * topk, N)
-        gate = raw_2d[:, :half_N]
-        up = raw_2d[:, half_N:]
-        gate.copy_(torch.nn.functional.silu(gate) * up)
-        intermediate_activated = gate.contiguous()
-        del raw_intermediate, raw_2d, gate, up
+        if activation == ActivationType.Swiglu:
+            # SwiGLU (GPT OSS): fused activation with interleaved [gate, up] layout
+            act = FusedActivation(
+                FnSpecs("swiglu", triton_kernels.swiglu.swiglu_fn, ("alpha", "limit")),
+                (swiglu_alpha, swiglu_limit),
+                2,
+            )
+            matmul_ogs(
+                hidden_states,
+                w1,
+                w1_bias,
+                routing_data,
+                gather_indx=gather_indx,
+                precision_config=w13_precision_config,
+                gammas=gammas if apply_router_weight_on_input else None,
+                fused_activation=act,
+                y=intermediate_cache,
+            )
+        else:
+            # SiLU (DeepSeek): concatenated [gate | up] layout, manual activation
+            raw_intermediate = matmul_ogs(
+                hidden_states,
+                w1,
+                w1_bias,
+                routing_data,
+                gather_indx=gather_indx,
+                precision_config=w13_precision_config,
+                gammas=gammas if apply_router_weight_on_input else None,
+            )
+            raw_2d = raw_intermediate.view(M * topk, N)
+            gate = raw_2d[:, :half_N]
+            up = raw_2d[:, half_N:]
+            intermediate_cache = intermediate_cache.view(M * topk, half_N)
+            intermediate_cache.copy_(torch.nn.functional.silu(gate) * up)
+            intermediate_cache = intermediate_cache.view(batch_dim, M * topk, half_N)
 
         matmul_ogs(
-            intermediate_activated,
+            intermediate_cache.view(M * topk, half_N),
             w2,
             w2_bias,
             routing_data,
@@ -280,7 +309,6 @@ def triton_kernel_fused_experts(
             gammas=None if apply_router_weight_on_input else gammas,
             y=output_tensor,
         )
-        del intermediate_activated
     finally:
         if needs_block_cap:
             reset_opt_flags_constraints()

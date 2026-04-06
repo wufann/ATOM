@@ -7,7 +7,6 @@ import aiter
 import torch
 from aiter import fused_qk_norm_rope_cache_quant_shuffle
 from aiter.ops.triton.fused_kv_cache import fused_qk_rope_reshape_and_cache
-from aiter.ops.triton.gluon.pa_decode_gluon import get_recommended_splits
 from aiter.ops.triton.unified_attention import unified_attention
 from atom.config import get_current_atom_config
 from atom.utils.forward_context import ForwardContext, get_forward_context
@@ -329,70 +328,62 @@ class PagedAttentionImpl(nn.Module):
 
         o = torch.empty_like(q)
         num_seqs = attn_metadata.context_lens.shape[0]
-        _, num_q_heads_total, head_size = q.shape
-        num_blocks, num_kv_heads, _, block_size, _ = k_cache.shape
-        # assume all query have same length
-        query_group_size = attn_metadata.max_seqlen_q * (
-            num_q_heads_total // num_kv_heads
-        )
-        assert num_q_heads_total % num_kv_heads == 0
-
-        max_context_partition_num = get_recommended_splits(num_seqs, num_kv_heads)
-
-        context_partition_size = 256
-        if self.sliding_window > 0:
-            max_context_partition_num = 1
-            context_partition_size = 128
-
-        # Output buffers (same as Triton)
-        intermediate_shape = (
-            num_seqs,
-            num_kv_heads,
-            max_context_partition_num,
-            query_group_size,
-        )
-        exp_sums = torch.empty(intermediate_shape, dtype=torch.float32, device=q.device)
-        max_logits = torch.empty(
-            intermediate_shape, dtype=torch.float32, device=q.device
-        )
-        temporary_output = torch.empty(
-            *intermediate_shape,
-            head_size,
-            dtype=q.dtype,
-            device=q.device,
+        sliding_window = (
+            (self.sliding_window - 1, 0)
+            if self.sliding_window > 0
+            else (-1, -1)
         )
 
-        if k_scale is not None and k_scale.numel() > 1:
-            k_scale = k_scale.unsqueeze(-1)
-            v_scale = v_scale.unsqueeze(-1)
+        # Convert KV cache from shuffle layout to flash layout for unified_attention
+        # k_cache shuffle: [num_blocks, num_kv_heads, head_size//x, block_size, x]
+        # k_cache flash:   [num_blocks, block_size, num_kv_heads, head_size]
+        if k_cache.dim() == 5:
+            nb, nkv, hdx, bs, x = k_cache.shape
+            k_flash = (
+                k_cache.permute(0, 3, 1, 2, 4)
+                .contiguous()
+                .view(nb, bs, nkv, hdx * x)
+            )
+        else:
+            k_flash = k_cache
+            nkv = k_cache.shape[2]
 
-        compute_type = (
-            torch.bfloat16
-            if self.kv_cache_dtype == "bf16"  # or per_tensor
-            else aiter.dtypes.fp8
-        )
-        torch.ops.aiter.pa_decode_gluon(
-            o,
+        # v_cache shuffle: [num_blocks, num_kv_heads, head_size, block_size]
+        # v_cache flash:   [num_blocks, block_size, num_kv_heads, head_size]
+        if v_cache.dim() == 4 and v_cache.shape[-1] != self.head_dim:
+            # layout is [num_blocks, num_kv_heads, head_size, block_size]
+            v_flash = v_cache.permute(0, 3, 1, 2).contiguous()
+        elif v_cache.dim() == 5:
+            nb, nkv_v, hdx, bs, x = v_cache.shape
+            v_flash = (
+                v_cache.permute(0, 3, 1, 2, 4)
+                .contiguous()
+                .view(nb, bs, nkv_v, hdx * x)
+            )
+        else:
+            v_flash = v_cache
+
+        descale_shape = (num_seqs, nkv)
+
+        unified_attention(
             q,
-            k_cache,
-            v_cache,
-            attn_metadata.context_lens,
-            attn_metadata.block_tables,
-            self.scale,
-            attn_metadata.max_seqlen_q,
-            max_context_partition_num,
-            context_partition_size,
-            compute_type,
-            None,  # q_scale
-            None if self.kv_cache_dtype == "bf16" else k_scale,
-            None if self.kv_cache_dtype == "bf16" else v_scale,
-            exp_sums=exp_sums,
-            max_logits=max_logits,
-            temporary_output=temporary_output,
+            k_flash,
+            v_flash,
+            o,
+            cu_seqlens_q=attn_metadata.cu_seqlens_q,
+            seqused_k=attn_metadata.context_lens,
+            max_seqlen_q=attn_metadata.max_seqlen_q,
+            max_seqlen_k=attn_metadata.max_seqlen_k,
+            softmax_scale=self.scale,
+            causal=True,
             alibi_slopes=None,
+            window_size=sliding_window,
+            block_table=attn_metadata.block_tables,
+            softcap=0,
+            q_descale=None,
+            k_descale=self.kv_scale.expand(descale_shape),
+            v_descale=self.kv_scale.expand(descale_shape),
             sinks=self.sinks,
-            sliding_window=self.sliding_window,
-            ps=True,
         )
 
         return o
@@ -501,19 +492,44 @@ class PagedAttentionImpl(nn.Module):
         block_tables = attn_metadata.block_tables
 
         o = torch.empty_like(q)
-        descale_shape = (attn_metadata.cu_seqlens_q.shape[0] - 1, k.shape[1])
+        num_seqs = attn_metadata.cu_seqlens_q.shape[0] - 1
+        descale_shape = (num_seqs, k.shape[1])
         sliding_window = (
             (self.sliding_window - 1, 0)
             if self.sliding_window is not None
             else (-1, -1)
         )
+
+        if block_tables is None:
+            # Prefill has no block_table. Use k/v directly as kv_cache with
+            # block_size=1 and a fake block_table (see comments above).
+            #   k: [total_tokens, num_kv_heads, head_size]
+            #     -> [total_tokens, 1, num_kv_heads, head_size]
+            total_tokens = k.shape[0]
+            k_for_attn = k.unsqueeze(1)
+            v_for_attn = v.unsqueeze(1)
+            # Build per-seq block tables: seq i maps to token indices
+            # [cu_seqlens_k[i], cu_seqlens_k[i]+1, ..., cu_seqlens_k[i+1]-1]
+            max_seqlen_k = attn_metadata.max_seqlen_k
+            cu_k = attn_metadata.cu_seqlens_k
+            offsets = cu_k[:num_seqs]  # [num_seqs]
+            block_tables = (
+                offsets.unsqueeze(1)
+                + torch.arange(max_seqlen_k, dtype=torch.int32, device=q.device)
+            )
+            seqused_k = cu_k[1:] - cu_k[:num_seqs]
+        else:
+            k_for_attn = k_cache
+            v_for_attn = v_cache
+            seqused_k = attn_metadata.context_lens
+
         unified_attention(
             q,
-            k_cache,
-            v_cache,
+            k_for_attn,
+            v_for_attn,
             o,
             cu_seqlens_q=attn_metadata.cu_seqlens_q,
-            seqused_k=attn_metadata.context_lens,
+            seqused_k=seqused_k,
             max_seqlen_q=attn_metadata.max_seqlen_q,
             max_seqlen_k=attn_metadata.max_seqlen_k,
             softmax_scale=self.scale,
@@ -535,6 +551,8 @@ class PagedAttentionImpl(nn.Module):
         ctx = fwd_ctx.context
 
         if ctx.is_prefill:
+            if self.use_triton_attn:
+                return self.prefill_attention_triton
             return self.prefill_attention
         else:
             if self.use_triton_attn:
