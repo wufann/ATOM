@@ -132,11 +132,7 @@ def _patch_vllm_mla_attention_get_kv_cache_spec(mla_attention_cls) -> None:
     """
 
     orig_get_kv_cache_spec = mla_attention_cls.get_kv_cache_spec
-    if getattr(
-        orig_get_kv_cache_spec,
-        "_atom_mla_get_kv_cache_spec_patched",
-        False
-    ):
+    if getattr(orig_get_kv_cache_spec, "_atom_mla_get_kv_cache_spec_patched", False):
         return
 
     @functools.wraps(orig_get_kv_cache_spec)

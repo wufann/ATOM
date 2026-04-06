@@ -646,6 +646,7 @@ def DeepseekV32IndexerCacheDecoratorForPluginMode(cls):
     # But in vLLM plugin mode, kv cache is a single tensor. So we wrap it in a
     # list so that the kv cache can be fully accessed.
     original_setattr = cls.__setattr__
+
     def _wrapped_setattr(self, name, value):
         if name == "kv_cache" and isinstance(value, torch.Tensor):
             original_setattr(self, name, [value])
