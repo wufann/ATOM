@@ -641,5 +641,18 @@ def DeepseekV32IndexerCacheDecoratorForPluginMode(cls):
         return cls
     cls.get_kv_cache_spec = _deepseek_v32_indexer_get_kv_cache_spec
     cls.get_attn_backend = _deepseek_v32_indexer_get_attn_backend
+
+    # In ATOM, kv cache is a list of tensors and accessed through indexing [0].
+    # But in vLLM plugin mode, kv cache is a single tensor. So we wrap it in a
+    # list so that the kv cache can be fully accessed.
+    original_setattr = cls.__setattr__
+    def _wrapped_setattr(self, name, value):
+        if name == "kv_cache" and isinstance(value, torch.Tensor):
+            original_setattr(self, name, [value])
+        else:
+            original_setattr(self, name, value)
+
+    cls.__setattr__ = _wrapped_setattr
+
     cls._atom_vllm_indexer_cache_decorated = True
     return cls
