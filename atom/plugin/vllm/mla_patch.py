@@ -124,10 +124,12 @@ def _patch_vllm_mla_attention_forward_impl(mla_attention_cls) -> None:
 
 
 def _patch_vllm_mla_attention_get_kv_cache_spec(mla_attention_cls) -> None:
-    # vLLM's MLAAttention may set the kv cache dtype to fp8_ds_mla, which uses
-    # 656 bytes per block and is not compatible with ATOM's standard 576-per-block
-    # fp8 layout. Therefore, we patch it so that in vLLM plugin mode, the layout
-    # of the kv cache is not in the fp8_ds_mla format.
+    """
+    vLLM's MLAAttention may set the kv cache dtype to fp8_ds_mla, which uses
+    656 bytes per block and is not compatible with ATOM's standard 576-per-block
+    fp8 layout. Therefore, we patch it so that in vLLM plugin mode, the layout
+    of the kv cache is not in the fp8_ds_mla format.
+    """
 
     orig_get_kv_cache_spec = mla_attention_cls.get_kv_cache_spec
     if getattr(
@@ -147,19 +149,8 @@ def _patch_vllm_mla_attention_get_kv_cache_spec(mla_attention_cls) -> None:
         if (
             hasattr(spec, "cache_dtype_str")
             and spec.cache_dtype_str == "fp8_ds_mla"
-            #and hasattr(self, "attn_backend")
-            #and self.attn_backend.get_name() != "FLASHMLA_SPARSE"
             and getattr(self, "use_sparse", False)
         ):
-            #from vllm.v1.kv_cache_interface import MLAAttentionSpec
-
-            #spec = MLAAttentionSpec(
-            #    block_size=spec.block_size,
-            #    num_kv_heads=spec.num_kv_heads,
-            #    head_size=spec.head_size,
-            #    dtype=spec.dtype,
-            #    cache_dtype_str=None,
-            #)
             spec = replace(spec, cache_dtype_str=None)
 
         return spec
