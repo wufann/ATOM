@@ -1,78 +1,8 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1775494028060,
+  "lastUpdate": 1775513968150,
   "repoUrl": "https://github.com/ROCm/ATOM",
   "entries": {
     "Benchmark": [
-      {
-        "commit": {
-          "author": {
-            "name": "Peng",
-            "username": "sunway513",
-            "email": "peng.sun@amd.com"
-          },
-          "committer": {
-            "name": "GitHub",
-            "username": "web-flow",
-            "email": "noreply@github.com"
-          },
-          "id": "f70484dc80ece0ad575255374f4ae2e0523220a5",
-          "message": "test: add profiler regression guard for HIP graph replay (#432)\n\n* test: add profiler regression guard for HIP graph replay\n\nAdds a lightweight integration test (~3s) that detects rocprofiler-sdk\ninterception overhead which degrades HIP graph replay performance in the\ninference serving stack.\n\nWhen PyTorch kineto is linked against librocprofiler-sdk.so instead of\nlibroctracer64.so, every hipGraphLaunch incurs ~270us of overhead,\ndropping GPU occupancy from ~97% to ~75%. This directly impacts decode\nthroughput in TP>1 serving scenarios.\n\nTest checks:\n- libtorch_cpu.so links roctracer (not rocprofiler-sdk)\n- HIP graph replay GPU occupancy > 80% (healthy = 97%)\n- Inter-kernel gaps > 100us count <= 5 (healthy = 0)\n- hipGraphLaunch CPU time < 150us (healthy = 50us)\n\nValidated on MI355 with:\n- PASS: rocm/vllm-dev:base_custom_rocm_7.2.1_torch_triton_20260326_full_fix\n- FAIL: rocm/vllm-dev:base_custom_rocm_7.2.1_torch_triton_20260326 (stock)\n\nReference: ROCm/rocm-systems#4401, ROCm/pytorch#2579, ROCm/pytorch#3056\n\nCo-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>\n\n* style: fix black + ruff formatting\n\n---------\n\nCo-authored-by: Claude Opus 4.6 (1M context) <noreply@anthropic.com>",
-          "timestamp": "2026-03-28T14:06:38Z",
-          "url": "https://github.com/ROCm/ATOM/commit/f70484dc80ece0ad575255374f4ae2e0523220a5"
-        },
-        "date": 1774718592681,
-        "tool": "customBiggerIsBetter",
-        "benches": [
-          {
-            "name": "ATOM::Kimi-K2.5-MXFP4 accuracy (GSM8K)",
-            "value": 0.9363,
-            "unit": "score",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23689073628 | Threshold: 0.93 | Baseline: 0.9409 | BaselineModel: moonshotai/Kimi-K2.5 | BaselineNote: HF: amd/Kimi-K2.5-MXFP4 card shows Kimi-K2.5 baseline=0.9409 | strict-match: 0.9356 | fewshot: 3 | Model: /models/amd/Kimi-K2.5-MXFP4"
-          },
-          {
-            "name": "ATOM::Llama-3.3-70B-Instruct-MXFP4-Preview accuracy (GSM8K)",
-            "value": 0.9045,
-            "unit": "score",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23689073628 | Threshold: 0.88 | BaselineModel: meta-llama/Llama-3.3-70B-Instruct | BaselineNote: HF page inaccessible; needs CI measurement of baseline | strict-match: 0.6096 | fewshot: 3 | Model: amd/Llama-3.3-70B-Instruct-MXFP4-Preview"
-          },
-          {
-            "name": "ATOM::Meta-Llama-3-8B-Instruct accuracy (GSM8K)",
-            "value": 0.7407,
-            "unit": "score",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23689073628 | Threshold: 0.73 | BaselineModel: meta-llama/Meta-Llama-3-8B-Instruct | BaselineNote: HF reports 0.796 but 8-shot CoT; CI uses 3-shot, not comparable | strict-match: 0.7422 | fewshot: 3 | Model: meta-llama/Meta-Llama-3-8B-Instruct"
-          },
-          {
-            "name": "ATOM::MiniMax-M2.5 accuracy (GSM8K)",
-            "value": 0.9303,
-            "unit": "score",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23689073628 | Threshold: 0.92 | Baseline: 0.9401 | BaselineModel: MiniMaxAI/MiniMax-M2.5 | BaselineNote: HF: amd/MiniMax-M2.5-MXFP4 card shows baseline=0.9401 | strict-match: 0.9272 | fewshot: 3 | Model: /models/MiniMaxAI/MiniMax-M2.5"
-          },
-          {
-            "name": "ATOM::Qwen3-235B-A22B-Instruct-2507-FP8 accuracy (GSM8K)",
-            "value": 0.9067,
-            "unit": "score",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23689073628 | Threshold: 0.87 | Baseline: 0.909 | BaselineModel: Qwen/Qwen3-235B-A22B-Instruct-2507 | BaselineNote: HF: amd/Qwen3-235B-A22B-Instruct-2507-MXFP4 card shows baseline=0.909 | strict-match: 0.8886 | fewshot: 3 | Model: /models/Qwen/Qwen3-235B-A22B-Instruct-2507-FP8"
-          },
-          {
-            "name": "ATOM::Qwen3-Next-80B-A3B-Thinking accuracy (GSM8K)",
-            "value": 0.6914,
-            "unit": "score",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23689073628 | Threshold: 0.65 | BaselineModel: Qwen/Qwen3-Next-80B-A3B-Thinking | BaselineNote: No public GSM8K baseline; HF card has no GSM8K | strict-match: 0.793 | fewshot: 3 | Model: /models/Qwen/Qwen3-Next-80B-A3B-Thinking"
-          },
-          {
-            "name": "ATOM::gpt-oss-120b accuracy (GSM8K)",
-            "value": 0.3995,
-            "unit": "score",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23689073628 | Threshold: 0.38 | BaselineModel: openai/gpt-oss-120b | BaselineNote: No public GSM8K baseline available | strict-match: 0.2358 | fewshot: 3 | Model: openai/gpt-oss-120b"
-          },
-          {
-            "name": "ATOM::gpt-oss-120b (2 GPUs) accuracy (GSM8K)",
-            "value": 0.4208,
-            "unit": "score",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23689073628 | Threshold: 0.38 | BaselineModel: openai/gpt-oss-120b | BaselineNote: No public GSM8K baseline available | strict-match: 0.2403 | fewshot: 3 | Model: openai/gpt-oss-120b"
-          }
-        ]
-      },
       {
         "commit": {
           "author": {
@@ -54607,6 +54537,58 @@ window.BENCHMARK_DATA = {
             "value": 0.423,
             "unit": "score",
             "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/24039895568 | Threshold: 0.38 | BaselineModel: openai/gpt-oss-120b | BaselineNote: No public GSM8K baseline available | strict-match: 0.2274 | fewshot: 3 | Model: /models/openai/gpt-oss-120b"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Lingpeng Jin",
+            "username": "valarLip",
+            "email": "103567126+valarLip@users.noreply.github.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "444a8d434062f01da4d1131d8a08a5cc1dd23949",
+          "message": "refactor(dashboard): redesign based on data visualization best practices (#492)\n\nApply ByteDance data platform's dashboard design principles:\n\n**Information Architecture**\n- KPI cards split into Performance and Health groups with visual separator\n- Tab badges show regression/fail counts with severity-matched colors\n- Filter bar shows active filter summary\n\n**Visual Hierarchy (Container Layout)**\n- All tabs wrap content in section-container with titled headers\n- Performance: separate Chart Overview and Detail Table sections\n- Tradeoff: separate Charts and Throughput Matrix sections\n- Data/Trends/Accuracy: consistent section wrapping\n\n**Conditional Formatting**\n- 3-color heatmap gradient (green → yellow → red) for TPOT/TTFT\n- Regression rows get colored left border (red=critical, orange=warning)\n- Trend percentages color-match regression severity\n- Minor changes (<5%) use muted colors to reduce visual noise\n\n**Accuracy Health Status**\n- Replace regression-based indicators with health-based status:\n  Healthy (green), At Risk (orange, margin<0.5%), Anomaly (red,\n  score<0.1), Fail (red, below threshold)\n- Status dot integrated into Model name column\n- KPI card shows healthy/total count\n\n**Color & Naming Consistency**\n- Unified all hardcoded colors to CSS variable values\n- Softer accent-green (#6dbf80) for dark theme harmony\n- \"Mode\" → \"Backend\" across all tabs/CSV/popover/detail\n- Chart titles enlarged (14px) with brighter color",
+          "timestamp": "2026-04-06T14:50:39Z",
+          "url": "https://github.com/ROCm/ATOM/commit/444a8d434062f01da4d1131d8a08a5cc1dd23949"
+        },
+        "date": 1775513966454,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ATOM-vLLM::Kimi-K2-Thinking-MXFP4 TP8 accuracy (GSM8K)",
+            "value": 0.9325,
+            "unit": "score",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/24044337774 | Threshold: 0.9 | Baseline: 0.9 | BaselineModel: amd/Kimi-K2-Thinking-MXFP4 | strict-match: 0.9295 | fewshot: 3 | Model: /models/amd/Kimi-K2-Thinking-MXFP4"
+          },
+          {
+            "name": "ATOM-vLLM::Qwen3-235B-A22B-Instruct-2507-FP8 TP8+EP8 accuracy (GSM8K)",
+            "value": 0.0129,
+            "unit": "score",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/24044337774 | Threshold: 0.87 | Baseline: 0.87 | BaselineModel: Qwen/Qwen3-235B-A22B-Instruct-2507 | strict-match: 0.0076 | fewshot: 3 | Model: /models/Qwen/Qwen3-235B-A22B-Instruct-2507-FP8"
+          },
+          {
+            "name": "ATOM-vLLM::Qwen3.5-397B-A17B TP8 accuracy (GSM8K)",
+            "value": 0.8696,
+            "unit": "score",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/24044337774 | Threshold: 0.83 | Baseline: 0.83 | BaselineModel: Qwen/Qwen3.5-397B-A17B | strict-match: 0.856 | fewshot: 3 | Model: /models/Qwen/Qwen3.5-397B-A17B"
+          },
+          {
+            "name": "ATOM-vLLM::Qwen3.5-397B-A17B-FP8 TP8 accuracy (GSM8K)",
+            "value": 0.8704,
+            "unit": "score",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/24044337774 | Threshold: 0.83 | Baseline: 0.83 | BaselineModel: Qwen/Qwen3.5-397B-A17B-FP8 | strict-match: 0.8537 | fewshot: 3 | Model: /models/Qwen/Qwen3.5-397B-A17B-FP8"
+          },
+          {
+            "name": "ATOM-vLLM::gpt-oss-120b TP2 accuracy (GSM8K)",
+            "value": 0.0015,
+            "unit": "score",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/24044337774 | Threshold: 0.38 | Baseline: 0.38 | BaselineModel: openai/gpt-oss-120b | strict-match: 0.0 | fewshot: 3 | Model: /models/openai/gpt-oss-120b"
           }
         ]
       }
