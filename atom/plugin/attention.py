@@ -1385,7 +1385,17 @@ def AiterBackendDecoratorForPluginMode(cls):
         for name in dir(methods_cls):
             if name.startswith("_"):
                 continue
-            setattr(cls, name, getattr(methods_cls, name))
+            #setattr(cls, name, getattr(methods_cls, name))
+            raw = methods_cls.__dict__.get(name)
+            if isinstance(raw, classmethod):
+                # Re-wrap so cls binds to the target class, not methods_cls.
+                # This is required for backends like sparse MLA where more
+                # than one attention backends exist that need to be decorated
+                # by this. Those backends need to return distinct identities
+                # through full_cls_name().
+                setattr(cls, name, classmethod(raw.__func__))
+            else:
+                setattr(cls, name, getattr(methods_cls, name))
     return cls
 
 
