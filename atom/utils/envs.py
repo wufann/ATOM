@@ -32,6 +32,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "ATOM_USE_TRITON_GEMM": lambda: os.getenv("ATOM_USE_TRITON_GEMM", "0") == "1",
     "ATOM_USE_TRITON_MXFP4_BMM": lambda: os.getenv("ATOM_USE_TRITON_MXFP4_BMM", "0")
     == "1",
+    "ATOM_USE_TRITON_MLA": lambda: os.getenv("ATOM_USE_TRITON_MLA", "0") == "1",
+    "ATOM_USE_TRITON_MOE": lambda: os.getenv("ATOM_USE_TRITON_MOE", "0") == "1",
     # --- Kernel Fusion Toggles ---
     # QK-norm-rope-cache-quant fusion for Qwen3-MoE; disabled by default.
     # Enable for Qwen3-MoE to get better performance.

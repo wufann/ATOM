@@ -93,15 +93,23 @@ class Sampler(nn.Module):
         logits: torch.Tensor,
         temperatures: torch.Tensor,
     ) -> torch.Tensor:
-        """Temperature-based Gumbel-max sampling."""
+        # """Temperature-based Gumbel-max sampling."""
         num_tokens, vocab_size = logits.shape
-        sampled_tokens = torch.empty(num_tokens, dtype=torch.int, device=logits.device)
+        # sampled_tokens = torch.empty(num_tokens, dtype=torch.int, device=logits.device)
+        # exponential = get_per_token_exponential(vocab_size, logits.device).expand(
+        #     num_tokens, vocab_size
+        # )
+        # mixed_sample_outer_exponential(
+        #     sampled_tokens, logits, exponential, temperatures, eps=self.eps
+        # )
+        # return sampled_tokens
         exponential = get_per_token_exponential(vocab_size, logits.device).expand(
-            num_tokens, vocab_size
-        )
-        mixed_sample_outer_exponential(
-            sampled_tokens, logits, exponential, temperatures, eps=self.eps
-        )
+                num_tokens, vocab_size
+            )
+        # Gumbel-max: argmax(logits / temperature - log(exponential))
+        scaled = logits.float() / temperatures.unsqueeze(-1).float().clamp(min=self.eps)
+        gumbel = scaled - torch.log(exponential.clamp(min=self.eps))
+        sampled_tokens = gumbel.argmax(dim=-1).to(torch.int)
         return sampled_tokens
 
     def _topk_topp_sample(

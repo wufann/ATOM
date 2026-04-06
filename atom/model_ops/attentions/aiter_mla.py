@@ -15,7 +15,7 @@ from aiter import (
 from aiter.dist.parallel_state import get_tp_group
 from atom.model_engine.scheduler import ScheduledBatch
 from atom.model_ops.attention_mla import MLAAttention, _MLA_MIN_HEADS
-from atom.utils import CpuGpuBuffer
+from atom.utils import CpuGpuBuffer, envs
 from atom.utils.block_convert import (
     block_table_convert_triton,
     kv_indices_generate_triton,
@@ -144,6 +144,27 @@ class AiterMLAMetadataBuilder(CommonAttentionBuilder):
 
         self.model_runner.forward_vars.update(mla_metadata)
 
+        if envs.ATOM_USE_TRITON_MLA:
+            hf = model_runner.config.hf_config
+            kv_lora_rank = hf.kv_lora_rank
+            num_kv_splits = 4
+            triton_mla_buffers = {
+                "triton_block_table": torch.zeros(
+                    self.max_bs, self.max_num_blocks_per_seq,
+                    dtype=torch.int32, device=self.device,
+                ),
+                "triton_attn_logits": torch.empty(
+                    self.max_bs, self.padded_num_attention_heads,
+                    num_kv_splits, kv_lora_rank + 1,
+                    dtype=torch.float32, device=self.device,
+                ),
+                "triton_lse": torch.empty(
+                    self.max_bs, self.padded_num_attention_heads,
+                    dtype=torch.float32, device=self.device,
+                ),
+            }
+            self.model_runner.forward_vars.update(triton_mla_buffers)
+
     def set_mla_persistent_worker_buffers(
         self,
         bs: int,
@@ -151,6 +172,7 @@ class AiterMLAMetadataBuilder(CommonAttentionBuilder):
         only_update: bool = False,
         num_reject_tokens: torch.Tensor = None,
     ):
+        return {}
         split_params = {
             "kv_granularity": max(self.block_size, 16),
             "max_seqlen_qo": max_q_len,
@@ -446,6 +468,7 @@ class AiterMLAMetadataBuilder(CommonAttentionBuilder):
         #             self.block_ratio,
         #         )
         #         ctx["block_tables_converted"] = var["block_tables_converted"].gpu[:bs]
+
         attn_metadata = AttentionMetaData(
             dropout_p=dropout_p,
             max_seqlen_q=max_seqlen_q,
@@ -453,6 +476,18 @@ class AiterMLAMetadataBuilder(CommonAttentionBuilder):
             **ctx,
         )
         attn_metadata.dtype_q = self.dtype_q
+
+        if envs.ATOM_USE_TRITON_MLA:
+            from atom.model_ops.triton_decode_attention import csr_to_dense_block_table
+            triton_bt = var["triton_block_table"][:scheduled_bs, :max_seqlen_k]
+            triton_bt.zero_()
+            csr_to_dense_block_table(
+                ctx["kv_indices"], ctx["kv_indptr"],
+                triton_bt, max_seqlen_k, scheduled_bs,
+            )
+            attn_metadata.triton_block_table = triton_bt
+            attn_metadata.triton_attn_logits = var["triton_attn_logits"][:scheduled_bs]
+            attn_metadata.triton_lse = var["triton_lse"][:scheduled_bs]
         positions = var["positions"].copy_to_gpu(sum_scheduled_tokens)
 
         # if self.model_runner.rank == 0:
@@ -487,6 +522,10 @@ class AiterMLAMetadataBuilder(CommonAttentionBuilder):
             **ctx_mla_ps,
         )
         attn_matadata.dtype_q = self.dtype_q
+        if envs.ATOM_USE_TRITON_MLA:
+            attn_matadata.triton_block_table = var["triton_block_table"][:bs]
+            attn_matadata.triton_attn_logits = var["triton_attn_logits"][:bs]
+            attn_matadata.triton_lse = var["triton_lse"][:bs]
         positions = var["positions"].copy_to_gpu(bs * max_q_len)
         context = Context(
             positions=positions, is_prefill=False, batch_size=bs, graph_bs=bs
