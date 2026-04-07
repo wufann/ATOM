@@ -37,7 +37,7 @@ vllm serve meta-llama/Llama-3.1-8B-Instruct \
 ### Meta-Llama-3.1-405B-Instruct-FP8/ (TP=8)
 
 ```bash
-vllm serve Meta-Llama-3.1-405B-Instruct-FP8/ \
+vllm serve meta-llama/Llama-3.1-405B-Instruct-FP8/ \
     --host localhost \
     --port 8000 \
     --tensor-parallel-size 8 \
@@ -92,7 +92,7 @@ Measured result (2026-04-03, TP=1, `ATOM_DISABLE_VLLM_PLUGIN_ATTENTION=1`):
 
 ```bash
 lm_eval --model local-completions \
-        --model_args model=Meta-Llama-3.1-405B-Instruct-FP8/,base_url=http://localhost:8000/v1/completions,num_concurrent=16,max_retries=3,tokenized_requests=False \
+        --model_args model=meta-llama/Llama-3.1-405B-Instruct-FP8/,base_url=http://localhost:8000/v1/completions,num_concurrent=16,max_retries=3,tokenized_requests=False \
         --tasks gsm8k \
         --num_fewshot 3
 ```
