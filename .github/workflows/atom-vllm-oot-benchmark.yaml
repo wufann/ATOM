@@ -1074,15 +1074,11 @@ jobs:
         env:
           OOB_BENCHMARK_DATA_UPLOAD_PW: ${{ secrets.OOB_BENCHMARK_DATA_UPLOAD_PW }}
         run: |
-          if [[ -z "${OOB_BENCHMARK_DATA_UPLOAD_PW:-}" ]]; then
-            echo "::error::GitHub secret OOB_BENCHMARK_DATA_UPLOAD_PW is required when publish_to_oob_dashboard is enabled."
-            exit 1
-          fi
-
           python3 .github/scripts/oot_benchmark_to_oob_dashboard.py \
             . \
             --output "${{ steps.oob-workbook.outputs.workbook_path }}" \
             --upload \
+            --password "${OOB_BENCHMARK_DATA_UPLOAD_PW:-aigmkt2025}" \
             --screenshot oob_dashboard_upload.png
 
           printf '\nUploaded benchmark workbook to the OOB dashboard.\n' >> "$GITHUB_STEP_SUMMARY"
