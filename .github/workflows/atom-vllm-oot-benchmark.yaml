@@ -75,6 +75,10 @@ on:
         description: "Upload benchmark results to the dashboard"
         type: boolean
         default: true
+      publish_to_oob_dashboard:
+        description: "Upload benchmark results to the OOB dashboard"
+        type: boolean
+        default: false
       param_lists:
         description: |
           "Benchmark parameter lists.
@@ -100,6 +104,7 @@ jobs:
       oot_base_image: ${{ steps.resolve.outputs.oot_base_image }}
       oot_image_source: ${{ steps.resolve.outputs.oot_image_source }}
       publish_to_dashboard: ${{ steps.resolve.outputs.publish_to_dashboard }}
+      publish_to_oob_dashboard: ${{ steps.resolve.outputs.publish_to_oob_dashboard }}
     steps:
       - name: Checkout selected branch
         uses: actions/checkout@v6
@@ -109,6 +114,7 @@ jobs:
         env:
           INPUT_OOT_IMAGE: ${{ inputs.oot_image || '' }}
           INPUT_PUBLISH_TO_DASHBOARD: ${{ inputs.publish_to_dashboard }}
+          INPUT_PUBLISH_TO_OOB_DASHBOARD: ${{ inputs.publish_to_oob_dashboard }}
         run: |
           set -euo pipefail
 
@@ -136,6 +142,7 @@ jobs:
           fi
 
           PUBLISH_TO_DASHBOARD="${INPUT_PUBLISH_TO_DASHBOARD:-true}"
+          PUBLISH_TO_OOB_DASHBOARD="${INPUT_PUBLISH_TO_OOB_DASHBOARD:-false}"
 
           mapfile -t VLLM_META < <(python3 - <<'PY'
           import re
@@ -167,6 +174,7 @@ jobs:
             echo "oot_base_image=${OOT_BASE_IMAGE}"
             echo "oot_image_source=${OOT_IMAGE_SOURCE}"
             echo "publish_to_dashboard=${PUBLISH_TO_DASHBOARD}"
+            echo "publish_to_oob_dashboard=${PUBLISH_TO_OOB_DASHBOARD}"
           } >> "$GITHUB_OUTPUT"
 
           printf '### OOT benchmark source\n- Repository: `%s`\n- Ref: `%s`\n- Image mode: `%s`\n' \
@@ -515,6 +523,7 @@ jobs:
       VLLM_COMMIT_USED: ${{ needs.resolve-atom-source.outputs.selected_vllm_commit }}
       VLLM_VERSION_USED: ${{ needs.resolve-atom-source.outputs.selected_vllm_version }}
       PUBLISH_TO_DASHBOARD: ${{ needs.resolve-atom-source.outputs.publish_to_dashboard }}
+      PUBLISH_TO_OOB_DASHBOARD: ${{ needs.resolve-atom-source.outputs.publish_to_oob_dashboard }}
     steps:
       - name: Check if model is enabled
         id: check
@@ -775,6 +784,7 @@ jobs:
             -e OOT_IMAGE_SOURCE="${OOT_IMAGE_SOURCE}" \
             -e OOT_IMAGE_TAG_USED="${OOT_IMAGE_TAG}" \
             -e PUBLISH_TO_DASHBOARD="${PUBLISH_TO_DASHBOARD}" \
+            -e PUBLISH_TO_OOB_DASHBOARD="${PUBLISH_TO_OOB_DASHBOARD}" \
             "$CONTAINER_NAME" python3 - <<'PY'
           import json
           import os
@@ -808,6 +818,9 @@ jobs:
           data["oot_image_tag"] = os.environ.get("OOT_IMAGE_TAG_USED", "")
           data["dashboard_publish_allowed"] = (
               os.environ.get("PUBLISH_TO_DASHBOARD", "false").lower() == "true"
+          )
+          data["oob_dashboard_publish_allowed"] = (
+              os.environ.get("PUBLISH_TO_OOB_DASHBOARD", "false").lower() == "true"
           )
 
           with open(result_path, "w", encoding="utf-8") as f:
@@ -895,18 +908,16 @@ jobs:
           printf 'Downloaded %s benchmark result files\n' "${#json_files[@]}"
 
       - name: Note summary behavior
+        env:
+          PUBLISH_TO_DASHBOARD: ${{ needs.resolve-atom-source.outputs.publish_to_dashboard }}
+          PUBLISH_TO_OOB_DASHBOARD: ${{ needs.resolve-atom-source.outputs.publish_to_oob_dashboard }}
         run: |
-          if [[ "${{ needs.resolve-atom-source.outputs.publish_to_dashboard }}" == "true" ]]; then
-            printf '### Summary mode\nResults from `%s@%s` using `%s` OOT image mode are shown below as a workflow summary table. Because dashboard upload is enabled for this run, this final Ubuntu summary job collects benchmark artifacts from all completed GPU cases and publishes the available successful results in one pass, then reconciles the completed run for regression comparison.\n' \
-              "${{ needs.resolve-atom-source.outputs.atom_repository }}" \
-              "${{ needs.resolve-atom-source.outputs.atom_ref }}" \
-              "${{ needs.resolve-atom-source.outputs.oot_image_source }}" >> "$GITHUB_STEP_SUMMARY"
-          else
-            printf '### Summary mode\nResults from `%s@%s` using `%s` OOT image mode are shown below as a workflow summary table only. Dashboard upload is disabled for this run.\n' \
-              "${{ needs.resolve-atom-source.outputs.atom_repository }}" \
-              "${{ needs.resolve-atom-source.outputs.atom_ref }}" \
-              "${{ needs.resolve-atom-source.outputs.oot_image_source }}" >> "$GITHUB_STEP_SUMMARY"
-          fi
+          printf '### Summary mode\nResults from `%s@%s` using `%s` OOT image mode are shown below as a workflow summary table.\n- Benchmark dashboard upload: `%s`\n- OOB dashboard upload: `%s`\n' \
+            "${{ needs.resolve-atom-source.outputs.atom_repository }}" \
+            "${{ needs.resolve-atom-source.outputs.atom_ref }}" \
+            "${{ needs.resolve-atom-source.outputs.oot_image_source }}" \
+            "${PUBLISH_TO_DASHBOARD}" \
+            "${PUBLISH_TO_OOB_DASHBOARD}" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Generate OOT benchmark summary table
         env:
@@ -982,9 +993,9 @@ jobs:
           echo "baseline_dir=${BASELINE_DIR}" >> "$GITHUB_OUTPUT"
 
       - name: Note skipped dashboard processing
-        if: needs.resolve-atom-source.outputs.publish_to_dashboard == 'true' && steps.summary-stats.outputs.passed_cases == '0'
+        if: (needs.resolve-atom-source.outputs.publish_to_dashboard == 'true' || needs.resolve-atom-source.outputs.publish_to_oob_dashboard == 'true') && steps.summary-stats.outputs.passed_cases == '0'
         run: |
-          printf '\nNo successful benchmark result JSONs were produced, so regression comparison and dashboard upload were skipped.\n' \
+          printf '\nNo successful benchmark result JSONs were produced, so benchmark publishing steps were skipped.\n' \
             >> "$GITHUB_STEP_SUMMARY"
 
       - name: Summarize regression against baseline
@@ -1030,6 +1041,59 @@ jobs:
             . \
             --output benchmark-action-input.json \
             --run-url "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+      - name: Install OOB dashboard upload dependencies
+        if: needs.resolve-atom-source.outputs.publish_to_oob_dashboard == 'true' && steps.summary-stats.outputs.passed_cases != '0'
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install openpyxl playwright
+          python3 -m playwright install chromium
+
+      - name: Build OOB dashboard workbook
+        if: needs.resolve-atom-source.outputs.publish_to_oob_dashboard == 'true' && steps.summary-stats.outputs.passed_cases != '0'
+        id: oob-workbook
+        run: |
+          python3 .github/scripts/oot_benchmark_to_oob_dashboard.py .
+          WORKBOOK_PATH=$(ls -1 benchmark_summary_*.xlsx | sort | tail -n 1)
+          if [[ -z "${WORKBOOK_PATH}" ]]; then
+            echo "::error::Failed to locate the generated OOB dashboard workbook."
+            exit 1
+          fi
+          echo "workbook_path=${WORKBOOK_PATH}" >> "$GITHUB_OUTPUT"
+          printf '\nGenerated OOB dashboard workbook: `%s`\n' "${WORKBOOK_PATH}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload OOB dashboard workbook artifact
+        if: needs.resolve-atom-source.outputs.publish_to_oob_dashboard == 'true' && steps.summary-stats.outputs.passed_cases != '0'
+        uses: actions/upload-artifact@v7
+        with:
+          name: oot-benchmark-oob-dashboard-workbook
+          path: ${{ steps.oob-workbook.outputs.workbook_path }}
+
+      - name: Publish benchmark result to OOB dashboard
+        if: needs.resolve-atom-source.outputs.publish_to_oob_dashboard == 'true' && steps.summary-stats.outputs.passed_cases != '0'
+        env:
+          OOB_BENCHMARK_DATA_UPLOAD_PW: ${{ secrets.OOB_BENCHMARK_DATA_UPLOAD_PW }}
+        run: |
+          if [[ -z "${OOB_BENCHMARK_DATA_UPLOAD_PW:-}" ]]; then
+            echo "::error::GitHub secret OOB_BENCHMARK_DATA_UPLOAD_PW is required when publish_to_oob_dashboard is enabled."
+            exit 1
+          fi
+
+          python3 .github/scripts/oot_benchmark_to_oob_dashboard.py \
+            . \
+            --output "${{ steps.oob-workbook.outputs.workbook_path }}" \
+            --upload \
+            --screenshot oob_dashboard_upload.png
+
+          printf '\nUploaded benchmark workbook to the OOB dashboard.\n' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload OOB dashboard debug screenshot
+        if: always() && needs.resolve-atom-source.outputs.publish_to_oob_dashboard == 'true' && steps.summary-stats.outputs.passed_cases != '0'
+        uses: actions/upload-artifact@v7
+        with:
+          name: oot-benchmark-oob-dashboard-upload-debug
+          path: oob_dashboard_upload.png
+          if-no-files-found: ignore
 
       - name: Store benchmark result to dashboard
         if: needs.resolve-atom-source.outputs.publish_to_dashboard == 'true' && steps.summary-stats.outputs.passed_cases != '0'
