@@ -1,262 +1,8 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1775520714419,
+  "lastUpdate": 1775551343387,
   "repoUrl": "https://github.com/ROCm/ATOM",
   "entries": {
     "Benchmark": [
-      {
-        "commit": {
-          "author": {
-            "name": "Lingpeng Jin",
-            "username": "valarLip",
-            "email": "103567126+valarLip@users.noreply.github.com"
-          },
-          "committer": {
-            "name": "GitHub",
-            "username": "web-flow",
-            "email": "noreply@github.com"
-          },
-          "id": "6f321f7dd6f7b484706760700effecead2a5d6bd",
-          "message": "fix: skip FP8 quantization for Indexer.weights_proj (GLM-5 GEMM crash) (#439)\n\nGLM-5-FP8 (glm_moe_dsa) crashes during model loading with\n\"RuntimeError: This GEMM is not supported!\" because\nIndexer.weights_proj is incorrectly routed to FP8 blockscale GEMM.\n\nThe HF config's modules_to_not_convert lists \"indexers_proj\" but\nATOM's actual layer path is \"indexer.weights_proj\" — the names don't\nmatch, so the exclude check fails silently.\n\nFix: set quant_config=None for weights_proj to use BF16 GEMM.\n\nAlso:\n- Fix dashboard accuracy tab date display (was multiplying\n  millisecond timestamps by 1000)\n- Cache is_rocm_aiter_fusion_shared_expert_enabled() result in local\n  var fuse_shared_experts to avoid repeated calls in hot-path topK\n  and MoE init functions",
-          "timestamp": "2026-03-28T18:34:45Z",
-          "url": "https://github.com/ROCm/ATOM/commit/6f321f7dd6f7b484706760700effecead2a5d6bd"
-        },
-        "date": 1774751645203,
-        "tool": "customBiggerIsBetter",
-        "benches": [
-          {
-            "name": "GLM-5-FP8 1024/1024 c=128 throughput (tok/s)",
-            "value": 2878.41,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23699055763 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=128 Total Tput (tok/s)",
-            "value": 5763.15,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23699055763 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=128 TTFT (ms)",
-            "value": 383.83,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23699055763 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=128 TPOT (ms)",
-            "value": 42.75,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23699055763 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=128 _gpu_count",
-            "value": 8,
-            "unit": ""
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=16 throughput (tok/s)",
-            "value": 623.3,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23699055763 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=16 Total Tput (tok/s)",
-            "value": 1253.24,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23699055763 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=16 TTFT (ms)",
-            "value": 165.55,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23699055763 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=16 TPOT (ms)",
-            "value": 24.9,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23699055763 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=16 _gpu_count",
-            "value": 8,
-            "unit": ""
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=2 throughput (tok/s)",
-            "value": 98.32,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23699055763 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=2 Total Tput (tok/s)",
-            "value": 194.84,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23699055763 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=2 TTFT (ms)",
-            "value": 125.29,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23699055763 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=2 TPOT (ms)",
-            "value": 20.16,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23699055763 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=2 _gpu_count",
-            "value": 8,
-            "unit": ""
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=256 throughput (tok/s)",
-            "value": 4171.59,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23699055763 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=256 Total Tput (tok/s)",
-            "value": 8339.15,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23699055763 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=256 TTFT (ms)",
-            "value": 638.64,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23699055763 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=256 TPOT (ms)",
-            "value": 59.1,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23699055763 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=256 _gpu_count",
-            "value": 8,
-            "unit": ""
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=32 throughput (tok/s)",
-            "value": 1064.52,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23699055763 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=32 Total Tput (tok/s)",
-            "value": 2125.67,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23699055763 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=32 TTFT (ms)",
-            "value": 199.75,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23699055763 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=32 TPOT (ms)",
-            "value": 29.03,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23699055763 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=32 _gpu_count",
-            "value": 8,
-            "unit": ""
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=4 throughput (tok/s)",
-            "value": 183.67,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23699055763 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=4 Total Tput (tok/s)",
-            "value": 369.14,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23699055763 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=4 TTFT (ms)",
-            "value": 128.43,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23699055763 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=4 TPOT (ms)",
-            "value": 20.96,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23699055763 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=4 _gpu_count",
-            "value": 8,
-            "unit": ""
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=64 throughput (tok/s)",
-            "value": 1810.42,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23699055763 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=64 Total Tput (tok/s)",
-            "value": 3621.66,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23699055763 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=64 TTFT (ms)",
-            "value": 268.79,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23699055763 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=64 TPOT (ms)",
-            "value": 33.92,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23699055763 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=64 _gpu_count",
-            "value": 8,
-            "unit": ""
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=8 throughput (tok/s)",
-            "value": 343.1,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23699055763 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=8 Total Tput (tok/s)",
-            "value": 683.67,
-            "unit": "tok/s",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23699055763 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=8 TTFT (ms)",
-            "value": 137.42,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23699055763 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=8 TPOT (ms)",
-            "value": 22.66,
-            "unit": "ms",
-            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/23699055763 | GPU: AMD Instinct MI355X | VRAM: 288GB | ROCm: 7.2.1"
-          },
-          {
-            "name": "GLM-5-FP8 1024/1024 c=8 _gpu_count",
-            "value": 8,
-            "unit": ""
-          }
-        ]
-      },
       {
         "commit": {
           "author": {
@@ -54825,6 +54571,100 @@ window.BENCHMARK_DATA = {
             "value": 0.702,
             "unit": "score",
             "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/24039895568 | Threshold: 0.65 | BaselineModel: Qwen/Qwen3-Next-80B-A3B-Thinking | BaselineNote: No public GSM8K baseline; HF card has no GSM8K | strict-match: 0.7961 | fewshot: 3 | Model: /models/Qwen/Qwen3-Next-80B-A3B-Thinking"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Lingpeng Jin",
+            "username": "valarLip",
+            "email": "103567126+valarLip@users.noreply.github.com"
+          },
+          "committer": {
+            "name": "GitHub",
+            "username": "web-flow",
+            "email": "noreply@github.com"
+          },
+          "id": "444a8d434062f01da4d1131d8a08a5cc1dd23949",
+          "message": "refactor(dashboard): redesign based on data visualization best practices (#492)\n\nApply ByteDance data platform's dashboard design principles:\n\n**Information Architecture**\n- KPI cards split into Performance and Health groups with visual separator\n- Tab badges show regression/fail counts with severity-matched colors\n- Filter bar shows active filter summary\n\n**Visual Hierarchy (Container Layout)**\n- All tabs wrap content in section-container with titled headers\n- Performance: separate Chart Overview and Detail Table sections\n- Tradeoff: separate Charts and Throughput Matrix sections\n- Data/Trends/Accuracy: consistent section wrapping\n\n**Conditional Formatting**\n- 3-color heatmap gradient (green → yellow → red) for TPOT/TTFT\n- Regression rows get colored left border (red=critical, orange=warning)\n- Trend percentages color-match regression severity\n- Minor changes (<5%) use muted colors to reduce visual noise\n\n**Accuracy Health Status**\n- Replace regression-based indicators with health-based status:\n  Healthy (green), At Risk (orange, margin<0.5%), Anomaly (red,\n  score<0.1), Fail (red, below threshold)\n- Status dot integrated into Model name column\n- KPI card shows healthy/total count\n\n**Color & Naming Consistency**\n- Unified all hardcoded colors to CSS variable values\n- Softer accent-green (#6dbf80) for dark theme harmony\n- \"Mode\" → \"Backend\" across all tabs/CSV/popover/detail\n- Chart titles enlarged (14px) with brighter color",
+          "timestamp": "2026-04-06T14:50:39Z",
+          "url": "https://github.com/ROCm/ATOM/commit/444a8d434062f01da4d1131d8a08a5cc1dd23949"
+        },
+        "date": 1775551342086,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ATOM::DeepSeek-R1-0528 accuracy (GSM8K)",
+            "value": 0.95,
+            "unit": "score",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/24039895568 | Threshold: 0.94 | Baseline: 0.9553 | BaselineModel: deepseek-ai/DeepSeek-R1-0528 | BaselineNote: CI measured FP8 baseline (GSM8K 3-shot flexible-extract) | strict-match: 0.9447 | fewshot: 3 | Model: /models/deepseek-ai/DeepSeek-R1-0528"
+          },
+          {
+            "name": "ATOM::DeepSeek-R1-0528 MTP accuracy (GSM8K)",
+            "value": 0.9484,
+            "unit": "score",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/24039895568 | Threshold: 0.94 | Baseline: 0.9553 | BaselineModel: deepseek-ai/DeepSeek-R1-0528 | BaselineNote: Same base model as DeepSeek-R1-0528 FP8 | strict-match: 0.9431 | fewshot: 3 | Model: /models/deepseek-ai/DeepSeek-R1-0528"
+          },
+          {
+            "name": "ATOM::DeepSeek-R1-0528-FP4 accuracy (GSM8K)",
+            "value": 0.9386,
+            "unit": "score",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/24039895568 | Threshold: 0.93 | Baseline: 0.9553 | BaselineModel: deepseek-ai/DeepSeek-R1-0528 | BaselineNote: CI measured FP8 baseline (deepseek-ai/DeepSeek-R1-0528 is natively FP8) | strict-match: 0.931 | fewshot: 3 | Model: /models/amd/DeepSeek-R1-0528-MXFP4-MTP-MoEFP4"
+          },
+          {
+            "name": "ATOM::DeepSeek-R1-0528-FP4 MTP accuracy (GSM8K)",
+            "value": 0.561,
+            "unit": "score",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/24039895568 | Threshold: 0.93 | Baseline: 0.9553 | BaselineModel: deepseek-ai/DeepSeek-R1-0528 | BaselineNote: CI measured FP8 baseline (deepseek-ai/DeepSeek-R1-0528 is natively FP8) | strict-match: 0.5027 | fewshot: 3 | Model: /models/amd/DeepSeek-R1-0528-MXFP4-MTP-MoEFP4"
+          },
+          {
+            "name": "ATOM::GLM-5-FP8 accuracy (GSM8K)",
+            "value": 0.9462,
+            "unit": "score",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/24039895568 | Threshold: 0.93 | Baseline: 0.9545 | BaselineModel: zai-org/GLM-5 | BaselineNote: HF: amd/GLM-5-MXFP4 card shows GLM-5 baseline=0.9545 (5-shot) | strict-match: 0.9484 | fewshot: 3 | Model: /models/zai-org/GLM-5-FP8"
+          },
+          {
+            "name": "ATOM::Kimi-K2.5-MXFP4 accuracy (GSM8K)",
+            "value": 0.9295,
+            "unit": "score",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/24039895568 | Threshold: 0.93 | Baseline: 0.9409 | BaselineModel: moonshotai/Kimi-K2.5 | BaselineNote: HF: amd/Kimi-K2.5-MXFP4 card shows Kimi-K2.5 baseline=0.9409 | strict-match: 0.9295 | fewshot: 3 | Model: /models/amd/Kimi-K2.5-MXFP4"
+          },
+          {
+            "name": "ATOM::MiniMax-M2.5 accuracy (GSM8K)",
+            "value": 0.9371,
+            "unit": "score",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/24039895568 | Threshold: 0.92 | Baseline: 0.9401 | BaselineModel: MiniMaxAI/MiniMax-M2.5 | BaselineNote: HF: amd/MiniMax-M2.5-MXFP4 card shows baseline=0.9401 | strict-match: 0.9348 | fewshot: 3 | Model: /models/MiniMaxAI/MiniMax-M2.5"
+          },
+          {
+            "name": "ATOM::Qwen3-235B-A22B-Instruct-2507-FP8 accuracy (GSM8K)",
+            "value": 0.8946,
+            "unit": "score",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/24039895568 | Threshold: 0.87 | Baseline: 0.909 | BaselineModel: Qwen/Qwen3-235B-A22B-Instruct-2507 | BaselineNote: HF: amd/Qwen3-235B-A22B-Instruct-2507-MXFP4 card shows baseline=0.909 | strict-match: 0.8802 | fewshot: 3 | Model: /models/Qwen/Qwen3-235B-A22B-Instruct-2507-FP8"
+          },
+          {
+            "name": "ATOM::Qwen3-235B-A22B-Instruct-2507-MXFP4 accuracy (GSM8K)",
+            "value": 0.8878,
+            "unit": "score",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/24039895568 | Threshold: 0.87 | Baseline: 0.909 | BaselineModel: Qwen/Qwen3-235B-A22B-Instruct-2507 | BaselineNote: HF: amd/Qwen3-235B-A22B-Instruct-2507-MXFP4 card shows baseline=0.909 | strict-match: 0.8741 | fewshot: 3 | Model: /models/amd/Qwen3-235B-A22B-Instruct-2507-MXFP4"
+          },
+          {
+            "name": "ATOM::Qwen3-Next-80B-A3B-Thinking accuracy (GSM8K)",
+            "value": 0.6869,
+            "unit": "score",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/24039895568 | Threshold: 0.65 | BaselineModel: Qwen/Qwen3-Next-80B-A3B-Thinking | BaselineNote: No public GSM8K baseline; HF card has no GSM8K | strict-match: 0.79 | fewshot: 3 | Model: /models/Qwen/Qwen3-Next-80B-A3B-Thinking"
+          },
+          {
+            "name": "ATOM::gpt-oss-120b accuracy (GSM8K)",
+            "value": 0.4177,
+            "unit": "score",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/24039895568 | Threshold: 0.38 | BaselineModel: openai/gpt-oss-120b | BaselineNote: No public GSM8K baseline available | strict-match: 0.2312 | fewshot: 3 | Model: /models/openai/gpt-oss-120b"
+          },
+          {
+            "name": "ATOM::gpt-oss-120b (2 GPUs) accuracy (GSM8K)",
+            "value": 0.4276,
+            "unit": "score",
+            "extra": "Run: https://github.com/ROCm/ATOM/actions/runs/24039895568 | Threshold: 0.38 | BaselineModel: openai/gpt-oss-120b | BaselineNote: No public GSM8K baseline available | strict-match: 0.2229 | fewshot: 3 | Model: /models/openai/gpt-oss-120b"
           }
         ]
       }
