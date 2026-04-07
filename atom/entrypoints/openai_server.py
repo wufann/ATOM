@@ -605,11 +605,17 @@ async def stream_chat_response(
                     think_state = 2
                     think_buf = ""
                     if after:
-                        yield create_chat_completion_chunk(request_id, model, after, finish_reason=finish)
+                        yield create_chat_completion_chunk(
+                            request_id, model, after, finish_reason=finish
+                        )
                     elif finish:
-                        yield create_chat_completion_chunk(request_id, model, "", finish_reason=finish)
+                        yield create_chat_completion_chunk(
+                            request_id, model, "", finish_reason=finish
+                        )
             elif len(think_buf) > 7 and "<" not in think_buf:
-                yield create_chat_completion_chunk(request_id, model, think_buf, finish_reason=finish)
+                yield create_chat_completion_chunk(
+                    request_id, model, think_buf, finish_reason=finish
+                )
                 think_buf = ""
         elif think_state == 1:
             think_buf += new_text
@@ -618,12 +624,18 @@ async def stream_chat_response(
                 think_state = 2
                 think_buf = ""
                 if after:
-                    yield create_chat_completion_chunk(request_id, model, after, finish_reason=finish)
+                    yield create_chat_completion_chunk(
+                        request_id, model, after, finish_reason=finish
+                    )
                 elif finish:
-                    yield create_chat_completion_chunk(request_id, model, "", finish_reason=finish)
+                    yield create_chat_completion_chunk(
+                        request_id, model, "", finish_reason=finish
+                    )
         else:
             if new_text:
-                yield create_chat_completion_chunk(request_id, model, new_text, finish_reason=finish)
+                yield create_chat_completion_chunk(
+                    request_id, model, new_text, finish_reason=finish
+                )
 
         if chunk_data.get("finished", False):
             logger.info(
