@@ -204,6 +204,9 @@ accuracy_one_model() {
 
   mkdir -p "${RESULT_DIR}"
   local run_tag
+  run_tag="$(date +%Y%m%d%H%M%S)_${model_name// /_}"
+  local output_path="${RESULT_DIR}/${run_tag}"
+  flat_result_file="${RESULT_DIR}/${run_tag}.json"
 
   echo ""
   echo "========== Running OOT gsm8k accuracy =========="
