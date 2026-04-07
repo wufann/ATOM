@@ -38,7 +38,7 @@ on:
         type: boolean
         default: false
       run_llama405_fp8_tp8:
-        description: "Meta-Llama-3.1-405B-Instruct-FP8/ TP8"
+        description: "Meta-Llama-3.1-405B-Instruct-FP8 TP8"
         required: false
         type: boolean
         default: false
