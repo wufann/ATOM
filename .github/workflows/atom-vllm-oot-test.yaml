@@ -386,7 +386,7 @@ jobs:
             runner: linux-atom-mi35x-4
           - model_name: "Qwen3.5-35B-A3B-FP8"
             model_path: "Qwen/Qwen3.5-35B-A3B-FP8"
-            extra_args: "--tensor-parallel-size 2"
+            extra_args: "--tensor-parallel-size 2 --attention-backend ROCM_AITER_FA"
             # FIXME: Remove these temporary Qwen3.5 workarounds after the
             # aiter fix landed
             env_vars: |
@@ -823,7 +823,7 @@ jobs:
                   "toggle_env": "RUN_QWEN3_NEXT_80B_TP4",
                   "model_name": "Qwen3-Next-80B-A3B-Instruct-FP8 TP4",
                   "model_path": "Qwen/Qwen3-Next-80B-A3B-Instruct-FP8",
-                  "extra_args": "--tensor-parallel-size 4",
+                  "extra_args": "--tensor-parallel-size 4 --attention-backend ROCM_AITER_FA",
                   "accuracy_test_threshold": 0.83,
                   "env_vars": "ATOM_DISABLE_VLLM_PLUGIN_ATTENTION=1\nATOM_USE_CUSTOM_ALL_GATHER=0",
                   "runner": "linux-atom-mi35x-4",
@@ -832,7 +832,7 @@ jobs:
                   "toggle_env": "RUN_QWEN35_397B_FP8_TP8",
                   "model_name": "Qwen3.5-397B-A17B-FP8 TP8",
                   "model_path": "Qwen/Qwen3.5-397B-A17B-FP8",
-                  "extra_args": "--tensor-parallel-size 8",
+                  "extra_args": "--tensor-parallel-size 8 --attention-backend ROCM_AITER_FA",
                   "accuracy_test_threshold": 0.83,
                   "env_vars": "ATOM_DISABLE_VLLM_PLUGIN_ATTENTION=1\nATOM_USE_CUSTOM_ALL_GATHER=0",
                   "runner": "linux-atom-mi35x-8",
@@ -841,7 +841,7 @@ jobs:
                   "toggle_env": "RUN_QWEN35_397B_TP8",
                   "model_name": "Qwen3.5-397B-A17B TP8",
                   "model_path": "Qwen/Qwen3.5-397B-A17B",
-                  "extra_args": "--tensor-parallel-size 8",
+                  "extra_args": "--tensor-parallel-size 8 --attention-backend ROCM_AITER_FA",
                   "accuracy_test_threshold": 0.83,
                   "env_vars": "ATOM_DISABLE_VLLM_PLUGIN_ATTENTION=1\nATOM_USE_CUSTOM_ALL_GATHER=0",
                   "runner": "linux-atom-mi35x-8",
