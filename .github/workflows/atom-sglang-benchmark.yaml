@@ -1,0 +1,273 @@
+name: ATOM SGLang Benchmark
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: "Runner label to execute the benchmark"
+        type: string
+        default: "atom-mi355-8gpu-oot-benchmark"
+      image:
+        description: "ATOM SGLang image to benchmark"
+        type: string
+        default: "rocm/atom-dev:sglang-latest"
+      model_name:
+        description: "Display name for the tested model"
+        type: string
+        default: "DeepSeek-R1-FP8 TP8"
+      model_path:
+        description: "Hugging Face model id or local model path"
+        type: string
+        default: "deepseek-ai/DeepSeek-R1-0528"
+      extra_args:
+        description: "Extra args passed to sglang.launch_server"
+        type: string
+        default: "--tensor-parallel-size 8"
+      env_vars:
+        description: "Optional environment variables injected into the container process"
+        type: string
+        default: "AITER_QUICK_REDUCE_QUANTIZATION=INT4\nSGLANG_AITER_FP8_PREFILL_ATTN=0\nSGLANG_USE_AITER=1\nATOM_ENABLE_DS_QKNORM_QUANT_FUSION=1"
+      bench_extra_args:
+        description: "Extra args passed to benchmark_serving.py"
+        type: string
+        default: ""
+      param_lists:
+        description: |
+          Benchmark parameter lists.
+          Format: input_length,output_length,concurrency,random_range_ratio
+          Separate multiple sets with semicolons.
+        type: string
+        default: "1024,1024,4,1;1024,1024,8,1;1024,1024,16,1;8192,1024,4,1"
+
+jobs:
+  parse-param-lists:
+    name: Parse benchmark parameter lists
+    runs-on: ubuntu-latest
+    outputs:
+      matrix_json: ${{ steps.parse.outputs.matrix_json }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Parse param lists
+        id: parse
+        run: |
+          PARAM_LISTS="${{ inputs.param_lists }}"
+          echo "Using param_lists: ${PARAM_LISTS}"
+          IFS=';' read -ra SETS <<< "${PARAM_LISTS}"
+          MATRIX_JSON="["
+          SEP=""
+          for SET in "${SETS[@]}"; do
+            IFS=',' read -ra PARAMS <<< "${SET}"
+            MATRIX_JSON="${MATRIX_JSON}${SEP}{\"input_length\":${PARAMS[0]},\"output_length\":${PARAMS[1]},\"concurrency\":${PARAMS[2]},\"random_range_ratio\":${PARAMS[3]}}"
+            SEP=","
+          done
+          MATRIX_JSON="${MATRIX_JSON}]"
+          echo "matrix_json=${MATRIX_JSON}" >> "$GITHUB_OUTPUT"
+
+  benchmark:
+    name: ${{ inputs.model_name }} (isl=${{ matrix.config.input_length }} osl=${{ matrix.config.output_length }} c=${{ matrix.config.concurrency }})
+    needs: [parse-param-lists]
+    runs-on: ${{ inputs.runner }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        config: ${{ fromJson(needs.parse-param-lists.outputs.matrix_json) }}
+    env:
+      IMAGE_TAG: ${{ inputs.image }}
+      BENCH_SERVING_REPO_URL: https://github.com/kimbochen/bench_serving.git
+      CONTAINER_NAME: atom_sglang_benchmark_${{ github.run_id }}_${{ github.run_attempt }}_${{ strategy.job-index }}
+      CONTAINER_RESULT_DIR: /tmp/atom_sglang_benchmark_results
+      CONTAINER_BENCH_SERVING_DIR: /tmp/atom-sglang-benchmark/bench_serving
+      SGLANG_PORT: "8013"
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Clean up old container
+        run: |
+          docker rm -f "${CONTAINER_NAME}" 2>/dev/null || true
+
+      - name: Set benchmark parameters
+        run: |
+          echo "ISL=${{ matrix.config.input_length }}" >> "$GITHUB_ENV"
+          echo "OSL=${{ matrix.config.output_length }}" >> "$GITHUB_ENV"
+          echo "CONC=${{ matrix.config.concurrency }}" >> "$GITHUB_ENV"
+          echo "RANDOM_RANGE_RATIO=${{ matrix.config.random_range_ratio }}" >> "$GITHUB_ENV"
+          echo "RESULT_FILENAME=isl${{ matrix.config.input_length }}_osl${{ matrix.config.output_length }}_c${{ matrix.config.concurrency }}.json" >> "$GITHUB_ENV"
+
+      - name: Set HF token
+        run: |
+          echo "HF_TOKEN=${HF_TOKEN:-${{ secrets.AMD_HF_TOKEN }}}" >> "$GITHUB_ENV"
+
+      - name: Pull image
+        run: |
+          docker pull "${IMAGE_TAG}"
+
+      - name: Prepare model cache mount
+        run: |
+          MODEL_CACHE_MOUNT=""
+          MODEL_CACHE_DESC="container-local /models (no host cache mount)"
+          if [ -d "/shared/data/amd_int/models" ]; then
+            MODEL_CACHE_MOUNT="-v /shared/data/amd_int/models:/models"
+            MODEL_CACHE_DESC="/shared/data/amd_int/models (shared host path)"
+          elif [ -d "/it-share/models" ]; then
+            MODEL_CACHE_MOUNT="-v /it-share/models:/models"
+            MODEL_CACHE_DESC="/it-share/models (shared host path)"
+          elif [ -d "/models" ]; then
+            MODEL_CACHE_MOUNT="-v /models:/models"
+            MODEL_CACHE_DESC="/models (shared host path)"
+          elif [ -d "/data/models" ]; then
+            MODEL_CACHE_MOUNT="-v /data/models:/models"
+            MODEL_CACHE_DESC="/data/models (shared host path)"
+          fi
+
+          echo "Using model cache backend: ${MODEL_CACHE_DESC}"
+          echo "MODEL_CACHE_MOUNT=${MODEL_CACHE_MOUNT}" >> "$GITHUB_ENV"
+
+      - name: Resolve model path
+        env:
+          INPUT_MODEL_PATH: ${{ inputs.model_path }}
+        run: |
+          model_path="${INPUT_MODEL_PATH}"
+          if [[ "${model_path}" = /models/* ]]; then
+            resolved="${model_path}"
+          elif [[ "${model_path}" = /shared/data/amd_int/models/* ]]; then
+            resolved="/models/${model_path#/shared/data/amd_int/models/}"
+          elif [[ "${model_path}" = /it-share/models/* ]]; then
+            resolved="/models/${model_path#/it-share/models/}"
+          elif [[ "${model_path}" = /data/models/* ]]; then
+            resolved="/models/${model_path#/data/models/}"
+          elif [[ "${model_path}" != /* && -n "${MODEL_CACHE_MOUNT}" ]]; then
+            resolved="/models/${model_path}"
+          else
+            resolved="${model_path}"
+          fi
+          echo "RESOLVED_MODEL_PATH=${resolved}" >> "$GITHUB_ENV"
+          echo "Using model path: ${resolved}"
+
+      - name: Start SGLang benchmark container
+        run: |
+          if [ -f "/etc/podinfo/gha-render-devices" ]; then
+            DEVICE_FLAG=$(cat /etc/podinfo/gha-render-devices)
+          else
+            DEVICE_FLAG="--device /dev/dri"
+          fi
+
+          docker run -dt --device=/dev/kfd ${DEVICE_FLAG} \
+            -v "${GITHUB_WORKSPACE:-$PWD}":/workspace \
+            ${MODEL_CACHE_MOUNT} \
+            -w /workspace \
+            --ipc=host --group-add video \
+            --shm-size=16G \
+            --privileged \
+            --cap-add=SYS_PTRACE \
+            --security-opt seccomp=unconfined \
+            --ulimit memlock=-1 \
+            --ulimit stack=67108864 \
+            -e HF_TOKEN="${HF_TOKEN:-}" \
+            -e HUGGING_FACE_HUB_TOKEN="${HF_TOKEN:-}" \
+            --name "${CONTAINER_NAME}" \
+            "${IMAGE_TAG}"
+        env:
+          GITHUB_WORKSPACE: ${{ github.workspace }}
+
+      - name: Prepare benchmark runner in container
+        run: |
+          docker exec "${CONTAINER_NAME}" bash -lc "
+            set -euo pipefail
+            rm -rf \"${CONTAINER_BENCH_SERVING_DIR%/bench_serving}\"
+            mkdir -p \"${CONTAINER_BENCH_SERVING_DIR%/bench_serving}\"
+            git clone --depth 1 \"${BENCH_SERVING_REPO_URL}\" \"${CONTAINER_BENCH_SERVING_DIR}\"
+            test -f \"${CONTAINER_BENCH_SERVING_DIR}/benchmark_serving.py\"
+          "
+
+      - name: Launch SGLang server
+        timeout-minutes: 180
+        env:
+          SGLANG_MODEL_NAME: ${{ inputs.model_name }}
+          SGLANG_MODEL_PATH: ${{ env.RESOLVED_MODEL_PATH }}
+          SGLANG_EXTRA_ARGS: ${{ inputs.extra_args }}
+          SGLANG_ENV_VARS: ${{ inputs.env_vars }}
+        run: |
+          docker exec \
+            -e SGLANG_MODEL_NAME="${SGLANG_MODEL_NAME}" \
+            -e SGLANG_MODEL_PATH="${SGLANG_MODEL_PATH}" \
+            -e SGLANG_EXTRA_ARGS="${SGLANG_EXTRA_ARGS}" \
+            -e SGLANG_ENV_VARS="${SGLANG_ENV_VARS}" \
+            -e SGLANG_PORT="${SGLANG_PORT}" \
+            -e MAX_WAIT_RETRIES="120" \
+            -e STREAM_SGLANG_LOGS="1" \
+            -e KEEP_SERVER_ALIVE_ON_EXIT="1" \
+            "${CONTAINER_NAME}" bash -lc "
+              set -euo pipefail
+              bash .github/scripts/atom_sglang_test.sh launch
+            "
+
+      - name: Run benchmark
+        timeout-minutes: 240
+        env:
+          SGLANG_MODEL_PATH: ${{ env.RESOLVED_MODEL_PATH }}
+          BENCH_EXTRA_ARGS: ${{ inputs.bench_extra_args }}
+        run: |
+          docker exec \
+            -e SGLANG_MODEL_PATH="${SGLANG_MODEL_PATH}" \
+            -e SGLANG_PORT="${SGLANG_PORT}" \
+            -e ISL="${ISL}" \
+            -e OSL="${OSL}" \
+            -e CONC="${CONC}" \
+            -e RANDOM_RANGE_RATIO="${RANDOM_RANGE_RATIO}" \
+            -e RESULT_DIR="${CONTAINER_RESULT_DIR}" \
+            -e RESULT_FILENAME="${RESULT_FILENAME}" \
+            -e BENCH_SERVING_DIR="${CONTAINER_BENCH_SERVING_DIR}" \
+            -e BENCH_EXTRA_ARGS="${BENCH_EXTRA_ARGS}" \
+            "${CONTAINER_NAME}" bash -lc "
+              set -euo pipefail
+              rm -rf \"${CONTAINER_RESULT_DIR}\"
+              mkdir -p \"${CONTAINER_RESULT_DIR}\"
+              PYTHONDONTWRITEBYTECODE=1 python3 \"${CONTAINER_BENCH_SERVING_DIR}/benchmark_serving.py\" \
+                --model=\"${SGLANG_MODEL_PATH}\" \
+                --backend=sglang \
+                --base-url=\"http://127.0.0.1:${SGLANG_PORT}\" \
+                --dataset-name=random \
+                --random-input-len=\"${ISL}\" \
+                --random-output-len=\"${OSL}\" \
+                --random-range-ratio \"${RANDOM_RANGE_RATIO}\" \
+                --num-prompts=\"$(( CONC * 10 ))\" \
+                --max-concurrency=\"${CONC}\" \
+                --trust-remote-code \
+                --num-warmups=\"$(( 2 * CONC ))\" \
+                --request-rate=inf \
+                --ignore-eos \
+                --save-result \
+                --percentile-metrics=\"ttft,tpot,itl,e2el\" \
+                --result-dir=\"${CONTAINER_RESULT_DIR}\" \
+                --result-filename=\"${RESULT_FILENAME}\" \
+                ${BENCH_EXTRA_ARGS:-}
+            "
+
+      - name: Collect benchmark artifacts
+        if: always()
+        run: |
+          docker cp "${CONTAINER_NAME}":/tmp/atom_sglang.log ./atom_sglang.log || true
+          docker cp "${CONTAINER_NAME}":"${CONTAINER_RESULT_DIR}" ./atom_sglang_benchmark_results || true
+
+      - name: Upload benchmark artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: atom-sglang-benchmark-${{ env.RESULT_FILENAME }}
+          path: |
+            atom_sglang.log
+            atom_sglang_benchmark_results
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker exec "${CONTAINER_NAME}" bash -lc "if [ -f /tmp/atom_sglang.pid ]; then kill \$(cat /tmp/atom_sglang.pid) || true; fi" || true
+          docker stop "${CONTAINER_NAME}" || true
+          docker rm "${CONTAINER_NAME}" || true

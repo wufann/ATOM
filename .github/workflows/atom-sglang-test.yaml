@@ -1,0 +1,212 @@
+name: ATOM SGLang Accuracy Test
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: "Runner label to execute the test"
+        type: string
+        default: "linux-atom-mi35x-4"
+      image:
+        description: "ATOM SGLang image to test"
+        type: string
+        default: "rocm/atom-dev:sglang-latest"
+      model_name:
+        description: "Display name for the tested model"
+        type: string
+        default: "DeepSeek-R1-FP8 TP4"
+      model_path:
+        description: "Hugging Face model id or local model path"
+        type: string
+        default: "deepseek-ai/DeepSeek-R1-0528"
+      extra_args:
+        description: "Extra args passed to sglang.launch_server"
+        type: string
+        default: "--tensor-parallel-size 4"
+      env_vars:
+        description: "Optional environment variables injected into the container process"
+        type: string
+        default: "AITER_QUICK_REDUCE_QUANTIZATION=INT4\nSGLANG_AITER_FP8_PREFILL_ATTN=0\nSGLANG_USE_AITER=1\nATOM_ENABLE_DS_QKNORM_QUANT_FUSION=1"
+      accuracy_threshold:
+        description: "Minimum exact_match,flexible-extract threshold"
+        type: string
+        default: "0.92"
+      lm_eval_task:
+        description: "lm-eval task name"
+        type: string
+        default: "gsm8k"
+
+jobs:
+  accuracy:
+    name: Accuracy - ${{ inputs.model_name }}
+    runs-on: ${{ inputs.runner }}
+    permissions:
+      contents: read
+    env:
+      IMAGE_TAG: ${{ inputs.image }}
+      CONTAINER_NAME: atom_sglang_accuracy_${{ github.run_id }}_${{ github.run_attempt }}
+      SGLANG_PORT: "8013"
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Clean up old container
+        run: |
+          docker rm -f "${CONTAINER_NAME}" 2>/dev/null || true
+
+      - name: Set HF token
+        run: |
+          echo "HF_TOKEN=${HF_TOKEN:-${{ secrets.AMD_HF_TOKEN }}}" >> "$GITHUB_ENV"
+
+      - name: Pull image
+        run: |
+          docker pull "${IMAGE_TAG}"
+
+      - name: Prepare model cache mount
+        run: |
+          MODEL_CACHE_MOUNT=""
+          MODEL_CACHE_DESC="container-local /models (no host cache mount)"
+          if [ -d "/shared/data/amd_int/models" ]; then
+            MODEL_CACHE_MOUNT="-v /shared/data/amd_int/models:/models"
+            MODEL_CACHE_DESC="/shared/data/amd_int/models (shared host path)"
+          elif [ -d "/it-share/models" ]; then
+            MODEL_CACHE_MOUNT="-v /it-share/models:/models"
+            MODEL_CACHE_DESC="/it-share/models (shared host path)"
+          elif [ -d "/models" ]; then
+            MODEL_CACHE_MOUNT="-v /models:/models"
+            MODEL_CACHE_DESC="/models (shared host path)"
+          elif [ -d "/data/models" ]; then
+            MODEL_CACHE_MOUNT="-v /data/models:/models"
+            MODEL_CACHE_DESC="/data/models (shared host path)"
+          fi
+
+          echo "Using model cache backend: ${MODEL_CACHE_DESC}"
+          echo "MODEL_CACHE_MOUNT=${MODEL_CACHE_MOUNT}" >> "$GITHUB_ENV"
+
+      - name: Resolve model path
+        env:
+          INPUT_MODEL_PATH: ${{ inputs.model_path }}
+        run: |
+          model_path="${INPUT_MODEL_PATH}"
+          if [[ "${model_path}" = /models/* ]]; then
+            resolved="${model_path}"
+          elif [[ "${model_path}" = /shared/data/amd_int/models/* ]]; then
+            resolved="/models/${model_path#/shared/data/amd_int/models/}"
+          elif [[ "${model_path}" = /it-share/models/* ]]; then
+            resolved="/models/${model_path#/it-share/models/}"
+          elif [[ "${model_path}" = /data/models/* ]]; then
+            resolved="/models/${model_path#/data/models/}"
+          elif [[ "${model_path}" != /* && -n "${MODEL_CACHE_MOUNT}" ]]; then
+            resolved="/models/${model_path}"
+          else
+            resolved="${model_path}"
+          fi
+          echo "RESOLVED_MODEL_PATH=${resolved}" >> "$GITHUB_ENV"
+          echo "Using model path: ${resolved}"
+
+      - name: Start SGLang test container
+        run: |
+          if [ -f "/etc/podinfo/gha-render-devices" ]; then
+            DEVICE_FLAG=$(cat /etc/podinfo/gha-render-devices)
+          else
+            DEVICE_FLAG="--device /dev/dri"
+          fi
+
+          docker run -dt --device=/dev/kfd ${DEVICE_FLAG} \
+            -v "${GITHUB_WORKSPACE:-$PWD}":/workspace \
+            ${MODEL_CACHE_MOUNT} \
+            -w /workspace \
+            --ipc=host --group-add video \
+            --shm-size=16G \
+            --privileged \
+            --cap-add=SYS_PTRACE \
+            --security-opt seccomp=unconfined \
+            --ulimit memlock=-1 \
+            --ulimit stack=67108864 \
+            -e HF_TOKEN="${HF_TOKEN:-}" \
+            -e HUGGING_FACE_HUB_TOKEN="${HF_TOKEN:-}" \
+            --name "${CONTAINER_NAME}" \
+            "${IMAGE_TAG}"
+        env:
+          GITHUB_WORKSPACE: ${{ github.workspace }}
+
+      - name: Run SGLang accuracy test
+        timeout-minutes: 180
+        env:
+          SGLANG_MODEL_NAME: ${{ inputs.model_name }}
+          SGLANG_MODEL_PATH: ${{ env.RESOLVED_MODEL_PATH }}
+          SGLANG_EXTRA_ARGS: ${{ inputs.extra_args }}
+          SGLANG_ENV_VARS: ${{ inputs.env_vars }}
+          LM_EVAL_TASK: ${{ inputs.lm_eval_task }}
+        run: |
+          docker exec \
+            -e SGLANG_MODEL_NAME="${SGLANG_MODEL_NAME}" \
+            -e SGLANG_MODEL_PATH="${SGLANG_MODEL_PATH}" \
+            -e SGLANG_EXTRA_ARGS="${SGLANG_EXTRA_ARGS}" \
+            -e SGLANG_ENV_VARS="${SGLANG_ENV_VARS}" \
+            -e SGLANG_PORT="${SGLANG_PORT}" \
+            -e MAX_WAIT_RETRIES="120" \
+            -e STREAM_SGLANG_LOGS="1" \
+            -e LM_EVAL_TASK="${LM_EVAL_TASK}" \
+            "${CONTAINER_NAME}" bash -lc "
+              set -euo pipefail
+              bash .github/scripts/atom_sglang_test.sh accuracy
+            "
+
+      - name: Check accuracy result
+        run: |
+          docker cp "${CONTAINER_NAME}":/tmp/atom_sglang_accuracy_results ./atom_sglang_accuracy_results || true
+          result_file=$(ls -1t atom_sglang_accuracy_results/*.json 2>/dev/null | head -n 1)
+          if [ -z "${result_file}" ] || [ ! -f "${result_file}" ]; then
+            echo "ERROR: No results JSON file found in atom_sglang_accuracy_results/"
+            exit 2
+          fi
+
+          flexible_extract_value=$(jq ".results.\"${{ inputs.lm_eval_task }}\"[\"exact_match,flexible-extract\"]" "${result_file}")
+          echo "Result file: ${result_file}"
+          echo "Flexible extract value: ${flexible_extract_value}"
+          echo "Accuracy threshold: ${{ inputs.accuracy_threshold }}"
+
+          result=$(awk -v val="${flexible_extract_value}" -v threshold="${{ inputs.accuracy_threshold }}" 'BEGIN {print (val < threshold) ? 1 : 0}')
+          if [ "${result}" -eq 1 ]; then
+            echo "Accuracy test failed: ${flexible_extract_value} < ${{ inputs.accuracy_threshold }}"
+            exit 1
+          fi
+
+      - name: Collect summary
+        if: success()
+        run: |
+          {
+            echo "### ATOM SGLang accuracy summary"
+            echo "- Model: \`${{ inputs.model_name }}\`"
+            echo "- Image: \`${{ inputs.image }}\`"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+          docker exec "${CONTAINER_NAME}" bash -lc "awk '/\|Tasks\|Version\|/,/^$/ { if (NF > 0) print }' /tmp/atom_sglang_accuracy_output.txt" >> "$GITHUB_STEP_SUMMARY" || true
+
+      - name: Collect artifacts
+        if: always()
+        run: |
+          docker cp "${CONTAINER_NAME}":/tmp/atom_sglang.log ./atom_sglang.log || true
+          docker cp "${CONTAINER_NAME}":/tmp/atom_sglang_accuracy_output.txt ./atom_sglang_accuracy_output.txt || true
+          docker cp "${CONTAINER_NAME}":/tmp/atom_sglang_accuracy_results ./atom_sglang_accuracy_results || true
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: atom-sglang-accuracy-${{ github.run_id }}
+          path: |
+            atom_sglang.log
+            atom_sglang_accuracy_output.txt
+            atom_sglang_accuracy_results
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker exec "${CONTAINER_NAME}" bash -lc "if [ -f /tmp/atom_sglang.pid ]; then kill \$(cat /tmp/atom_sglang.pid) || true; fi" || true
+          docker stop "${CONTAINER_NAME}" || true
+          docker rm "${CONTAINER_NAME}" || true
