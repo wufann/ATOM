@@ -34,7 +34,6 @@ from transformers import AutoTokenizer
 from .protocol import (
     ChatCompletionRequest,
     CompletionRequest,
-    ErrorResponse,
     ModelCard,
     ModelList,
 )

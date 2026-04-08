@@ -7,13 +7,11 @@ import asyncio
 import json
 import logging
 import time
-import uuid
-from typing import Any, AsyncGenerator, Dict, List, Optional
+from typing import Any, AsyncGenerator, Dict, Optional
 
 from .protocol import (
     CHAT_COMPLETION_CHUNK_OBJECT,
     STREAM_DONE_MESSAGE,
-    ChatCompletionRequest,
     ChatCompletionResponse,
 )
 from .reasoning import ReasoningFilter, separate_reasoning
@@ -65,7 +63,6 @@ async def stream_chat_response(
     num_tokens_input = len(tokenizer.encode(prompt))
     num_tokens_output = 0
     reasoning_filter = ReasoningFilter()
-    first_chunk = True
 
     # Send initial role chunk
     yield create_chat_chunk(request_id, model, delta={"role": "assistant"})
@@ -74,7 +71,7 @@ async def stream_chat_response(
         chunk_data = await stream_queue.get()
         new_text = chunk_data["text"]
         num_tokens_output += len(chunk_data.get("token_ids", []))
-        finish = chunk_data.get("finish_reason")
+        chunk_data.get("finish_reason")
 
         # Process through reasoning filter
         segments = reasoning_filter.process(new_text)

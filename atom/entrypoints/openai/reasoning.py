@@ -9,7 +9,7 @@ Also strips raw tool call tokens that the model may output.
 """
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional, Tuple
 
 
