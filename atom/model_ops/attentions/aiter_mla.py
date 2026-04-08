@@ -160,7 +160,7 @@ class AiterMLAMetadataBuilder(CommonAttentionBuilder):
             "max_seqlen_qo": max_q_len,
             "uni_seqlen_qo": max_q_len,
             "fast_mode": 1,
-            "max_split_per_batch": 16,
+            "max_split_per_batch": 64,
         }
         var = self.model_runner.forward_vars
         work_meta_data = var["work_meta_data"]
