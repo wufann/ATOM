@@ -215,7 +215,7 @@ jobs:
                   "extra_args": "--trust-remote-code --tensor-parallel-size 8",
                   "bench_args": "",
                   "runner": "atom-mi355-8gpu-sglang-benchmark",
-                  "env_vars": "AITER_QUICK_REDUCE_QUANTIZATION=INT4\nSGLANG_AITER_FP8_PREFILL_ATTN=0\nSGLANG_USE_AITER=1\nATOM_ENABLE_DS_QKNORM_QUANT_FUSION=1"
+                  "env_vars": "AITER_QUICK_REDUCE_QUANTIZATION=INT4\\nSGLANG_AITER_FP8_PREFILL_ATTN=0\\nSGLANG_USE_AITER=1\\nATOM_ENABLE_DS_QKNORM_QUANT_FUSION=1"
               }
           ]
 
@@ -231,6 +231,67 @@ jobs:
 
           print(f"models_json={json.dumps(selected)}")
           print(f"has_enabled_models={'true' if selected else 'false'}")
+          PY
+
+  build-benchmark-matrix:
+    name: Build SGLang benchmark matrix
+    needs: [parse-param-lists, load-models]
+    if: >-
+      needs.parse-param-lists.result == 'success'
+      && needs.load-models.result == 'success'
+      && needs.load-models.outputs.has_enabled_models == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      benchmark_matrix: ${{ steps.build.outputs.benchmark_matrix }}
+      has_benchmark_cells: ${{ steps.build.outputs.has_benchmark_cells }}
+    steps:
+      - name: Combine models and params
+        id: build
+        env:
+          MODELS_JSON: ${{ needs.load-models.outputs.models_json }}
+          PARAMS_JSON: ${{ needs.parse-param-lists.outputs.matrix_json }}
+        run: |
+          BENCHMARK_MATRIX="$(python3 - <<'PY'
+          import json
+          import os
+
+          models = json.loads(os.environ["MODELS_JSON"])
+          params = json.loads(os.environ["PARAMS_JSON"])
+
+          include = []
+          for model in models:
+              supported_pairs = set(model.get("supported_input_output_pairs", []))
+              excluded_pairs = set(model.get("excluded_input_output_pairs", []))
+              model_params = []
+              seen = set()
+
+              for param in params:
+                  variants = [param]
+
+                  for variant in variants:
+                      key = (
+                          int(variant["input_length"]),
+                          int(variant["output_length"]),
+                          int(variant["concurrency"]),
+                          str(variant["random_range_ratio"]),
+                      )
+                      if key in seen:
+                          continue
+                      seen.add(key)
+                      model_params.append(variant)
+
+              for param in model_params:
+                  pair = f"{param['input_length']}_{param['output_length']}"
+                  if supported_pairs and pair not in supported_pairs:
+                      continue
+                  if excluded_pairs and pair in excluded_pairs:
+                      continue
+                  
+                  cell = dict(model)
+                  cell.update(param)
+                  include.append(cell)
+
+          print(json.dumps({"include": include}))
           PY
           )"
           echo "benchmark_matrix=${BENCHMARK_MATRIX}" >> "$GITHUB_OUTPUT"
