@@ -4,7 +4,6 @@
 import logging
 from dataclasses import dataclass
 from functools import partial as functools_partial
-from tqdm import tqdm
 from typing import Optional
 
 import torch
@@ -24,7 +23,7 @@ from aiter.ops.triton.gather_kv_b_proj import gather_kv_b_proj
 from atom.config import get_current_atom_config
 from atom.model_ops.linear import use_triton_gemm
 from atom.model_ops.utils import get_and_maybe_dequant_weights
-from atom.plugin import is_plugin_mode, is_vllm
+from atom.plugin import is_plugin_mode
 from atom.plugin.attention_mla import MLAAttentionImplDecoratorForPluginMode
 from atom.plugin.attention_mla_sparse import (
     MLASparseAttentionImplDecoratorForPluginMode,
