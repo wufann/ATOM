@@ -289,8 +289,20 @@ def load_model(
     detect_fused_expert_fn = getattr(model, "detect_fused_expert_format", None)
     get_fused_expert_mapping_fn = getattr(model, "get_fused_expert_mapping", None)
 
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        futures = []
+    use_threadpool = envs.ATOM_LOADER_USE_THREADPOOL
+    if use_threadpool:
+        executor = concurrent.futures.ThreadPoolExecutor()
+    else:
+        executor = None
+    futures = []
+
+    def _submit(fn, *args):
+        if executor is not None:
+            futures.append(executor.submit(fn, *args))
+        else:
+            fn(*args)
+
+    try:
         disable_mmap = envs.ATOM_DISABLE_MMAP
         for name, weight_tensor in safetensors_weights_iterator(
             model_name_or_path, disable_mmap=disable_mmap
@@ -364,11 +376,7 @@ def load_model(
                                 except AttributeError:
                                     continue
                                 weight_loader = getattr(param, "weight_loader")
-                                futures.append(
-                                    executor.submit(
-                                        weight_loader, param, weight_tensor, shard_idx
-                                    )
-                                )
+                                _submit(weight_loader, param, weight_tensor, shard_idx)
                                 loaded_weights_record.add(prefix + param_name)
                     else:
                         # Checkpoint has separate weights, load into fused param
@@ -381,12 +389,7 @@ def load_model(
                             except AttributeError:
                                 break
                             weight_loader = getattr(param, "weight_loader")
-                            # weight_loader(param, weight_tensor, shard_id)
-                            futures.append(
-                                executor.submit(
-                                    weight_loader, param, weight_tensor, shard_id
-                                )
-                            )
+                            _submit(weight_loader, param, weight_tensor, shard_id)
                             loaded_weights_record.add(prefix + param_name)
                     break
             else:
@@ -456,15 +459,13 @@ def load_model(
                             matched = True
                             break
                         weight_loader = getattr(param, "weight_loader")
-                        futures.append(
-                            executor.submit(
-                                weight_loader,
-                                param,
-                                weight_tensor,
-                                name,
-                                shard_id,
-                                expert_id,
-                            )
+                        _submit(
+                            weight_loader,
+                            param,
+                            weight_tensor,
+                            name,
+                            shard_id,
+                            expert_id,
                         )
                         loaded_weights_record.add(prefix + name)
                         matched = True
@@ -481,15 +482,13 @@ def load_model(
                             weight_loader = getattr(
                                 param, "weight_loader", default_weight_loader
                             )
-                            futures.append(
-                                executor.submit(
-                                    weight_loader,
-                                    param,
-                                    weight_tensor,
-                                    "",  # use merged moe loader
-                                    "",
-                                    expert_id,
-                                )
+                            _submit(
+                                weight_loader,
+                                param,
+                                weight_tensor,
+                                "",  # use merged moe loader
+                                "",
+                                expert_id,
                             )
                             loaded_weights_record.add(prefix + name)
                         try:
@@ -499,9 +498,7 @@ def load_model(
                         weight_loader = getattr(
                             param, "weight_loader", default_weight_loader
                         )
-                        futures.append(
-                            executor.submit(weight_loader, param, weight_tensor)
-                        )
+                        _submit(weight_loader, param, weight_tensor)
                         loaded_weights_record.add(prefix + name)
                 else:
                     # Model doesn't have expert mapping, use generic loading
@@ -512,12 +509,12 @@ def load_model(
                     weight_loader = getattr(
                         param, "weight_loader", default_weight_loader
                     )
-                    # weight_loader(param, weight_tensor)
-                    futures.append(executor.submit(weight_loader, param, weight_tensor))
+                    _submit(weight_loader, param, weight_tensor)
                     loaded_weights_record.add(prefix + name)
-        # Wait for all tasks to complete and raise any exceptions.
-        for future in concurrent.futures.as_completed(futures):
-            future.result()
+    finally:
+        if executor is not None:
+            concurrent.futures.wait(futures)
+            executor.shutdown(wait=True)
 
     for _, module in model.named_modules():
         if hasattr(module, "process_weights_after_loading"):
