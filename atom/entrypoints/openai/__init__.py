@@ -3,6 +3,12 @@
 
 """ATOM OpenAI-compatible API server package."""
 
-from .api_server import main
+
+def main():
+    """Lazy entry point to avoid importing heavy deps at package level."""
+    from .api_server import main as _main
+
+    _main()
+
 
 __all__ = ["main"]
