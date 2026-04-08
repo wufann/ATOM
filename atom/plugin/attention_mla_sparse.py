@@ -629,7 +629,9 @@ def _deepseek_v32_indexer_get_kv_cache_spec(self, vllm_config):
 
 
 def _deepseek_v32_indexer_get_attn_backend(self):
-    from atom.model_ops.attentions.aiter_mla import AiterMLASparseIndexerBackend
+    from atom.plugin.vllm.attention_backend.mla_sparse import (
+        AiterMLASparseIndexerBackend,
+    )
 
     return AiterMLASparseIndexerBackend
 
