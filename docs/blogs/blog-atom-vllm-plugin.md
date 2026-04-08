@@ -98,7 +98,7 @@ Once the model is constructed and weights are loaded, vLLM drives the serving lo
 
 ## 4. Supported Models
 
-The ATOM vLLM plugin backend supports both LLMs and VLMs through a unified serving pipeline, covering text-only LLM models and Qwen3.5-based conditional-generation VLM models (including both dense and Mixture-of-Experts (MoE) variants). The table below lists the supported model architectures, types, representative examples, and their corresponding ATOM model classes:
+The ATOM vLLM plugin backend supports both LLMs and VLMs through a unified serving pipeline, covering text-only LLM models and conditional-generation VLM models (including both dense and Mixture-of-Experts (MoE) variants such as Qwen3.5 and Kimi-K2.5). The table below lists the supported model architectures, types, representative examples, and their corresponding ATOM model classes:
 
 | Architecture | Type | Representative Models | ATOM Model Class |
 |-------------|------|----------------------|-----------------|
@@ -109,8 +109,11 @@ The ATOM vLLM plugin backend supports both LLMs and VLMs through a unified servi
 | Qwen3NextForCausalLM | Hybrid MoE | Qwen/Qwen3-Next-80B-A3B-Instruct-FP8 | `atom.models.qwen3_next` |
 | Qwen3_5ForConditionalGeneration | Dense (Text/VLM) | Qwen/Qwen3.5-35B-A3B-FP8 | `atom.models.qwen3_5` |
 | Qwen3_5MoeForConditionalGeneration | MoE (Text/VLM) | Qwen/Qwen3.5-397B-A17B-FP8 | `atom.models.qwen3_5` |
+| KimiK25ForConditionalGeneration | MoE (Text/VLM) | amd/Kimi-K2.5-MXFP4 | `atom.models.kimi_k25` |
 
 > **Note:** Kimi-K2 (`amd/Kimi-K2-Thinking-MXFP4`) shares the DeepSeek V3-style MLA+MoE architecture and is served through the same `DeepseekV3ForCausalLM` pathway with `--trust-remote-code`.
+>
+> **Kimi-K2.5 support:** In the latest ATOM vLLM plugin code, `KimiK25ForConditionalGeneration` is explicitly registered in the plugin model registry, and `amd/Kimi-K2.5-MXFP4` is served through the dedicated Kimi-K2.5 conditional-generation path with multimodal (text/image/video) processing.
 
 For step-by-step deployment guides—including Docker environment setup, server launch commands, performance benchmarking, and accuracy validation—refer to the [ATOM vLLM Recipes](https://github.com/ROCm/ATOM/tree/main/recipes/atom_vllm).
 
