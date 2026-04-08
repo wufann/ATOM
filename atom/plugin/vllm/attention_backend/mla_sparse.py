@@ -13,6 +13,7 @@ from atom.plugin.attention import (
 )
 from atom.plugin.prepare import is_plugin_mode
 
+
 @AiterBackendDecoratorForPluginMode
 class AiterMLASparseBackend(AttentionBackend):
     """
