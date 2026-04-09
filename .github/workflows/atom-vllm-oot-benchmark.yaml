@@ -1054,10 +1054,12 @@ jobs:
           CURRENT_SHA=$(git rev-parse HEAD)
           cp .github/dashboard/index.html /tmp/dashboard_index.html
           cp docs/assets/atom_logo.png /tmp/dashboard_logo.png
+          cp docs/assets/atom_logo_mini.png /tmp/dashboard_logo_mini.png
           git fetch origin gh-pages
           git checkout gh-pages
           cp /tmp/dashboard_index.html benchmark-dashboard/index.html
           cp /tmp/dashboard_logo.png benchmark-dashboard/atom_logo.png
+          cp /tmp/dashboard_logo_mini.png benchmark-dashboard/atom_logo_mini.png
           git add benchmark-dashboard/
           git diff --cached --quiet || git commit -m "Update OOT benchmark data and dashboard"
           git push origin gh-pages
