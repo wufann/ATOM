@@ -421,6 +421,10 @@ _watermarkImg.src = document.querySelector('.header-logo')?.src || 'atom_logo.pn
 Chart.register({
   id: 'watermark',
   beforeDraw(chart) {
+    // Only draw watermark on charts inside the active Performance tab
+    var perfTab = document.getElementById('tab-performance');
+    if (!perfTab || !perfTab.classList.contains('active')) return;
+    if (!perfTab.contains(chart.canvas)) return;
     if (!_watermarkImg.complete || !_watermarkImg.naturalWidth) return;
     const { ctx, chartArea: area } = chart;
     if (!area) return;
