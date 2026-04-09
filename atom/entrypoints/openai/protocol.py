@@ -64,6 +64,11 @@ class ChatCompletionRequest(BaseModel):
     stream: Optional[bool] = False
     seed: Optional[int] = None
     chat_template_kwargs: Optional[Dict[str, Any]] = None
+    # Tool calling
+    tools: Optional[List[Dict[str, Any]]] = None
+    tool_choice: Optional[Any] = (
+        None  # "auto", "none", "required", or {function: {name}}
+    )
     # Accepted for compatibility, not actively used:
     presence_penalty: Optional[float] = 0.0
     frequency_penalty: Optional[float] = 0.0

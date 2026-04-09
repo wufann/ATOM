@@ -3,7 +3,6 @@
 
 """Tests for reasoning/thinking content separation."""
 
-
 from atom.entrypoints.openai.reasoning import (
     ReasoningFilter,
     separate_reasoning,
@@ -52,16 +51,14 @@ class TestSeparateReasoning:
         assert "Step 3" in reasoning
         assert content == "Result: 42"
 
-    def test_tool_call_stripping(self):
+    def test_tool_calls_preserved(self):
+        """Tool calls are NOT stripped by separate_reasoning (handled by tool_parser)."""
         text = "Hello<|tool_calls_section_begin|>function call here<|tool_calls_section_end|>"
         reasoning, content = separate_reasoning(text)
         assert reasoning is None
-        assert content == "Hello"
-
-    def test_unclosed_tool_call(self):
-        text = "Hi<|tool_calls_section_begin|>incomplete tool call"
-        reasoning, content = separate_reasoning(text)
-        assert content == "Hi"
+        # Tool call tokens remain — tool_parser.parse_tool_calls() handles them
+        assert "Hello" in content
+        assert "<|tool_calls_section_begin|>" in content
 
     def test_thinking_with_tool_call(self):
         text = (
@@ -70,7 +67,8 @@ class TestSeparateReasoning:
         )
         reasoning, content = separate_reasoning(text)
         assert reasoning == "thinking"
-        assert content == "Answer"
+        # Content includes tool call tokens (parsed separately by tool_parser)
+        assert "Answer" in content
 
     def test_only_thinking_no_answer(self):
         """Model generated only thinking content then stopped."""
@@ -137,7 +135,9 @@ class TestReasoningFilter:
         assert "step 2" in reasoning
         assert content == "done"
 
-    def test_tool_call_in_content_phase(self):
+    def test_tool_calls_passed_through(self):
+        """ReasoningFilter passes tool call tokens through as content
+        (ToolCallStreamParser handles them in serving_chat)."""
         tokens = [
             "<think>",
             "think",
@@ -150,7 +150,8 @@ class TestReasoningFilter:
         results = self._run_filter(tokens)
         content = "".join(t for f, t in results if f == "content")
         assert "Hi" in content
-        assert "call" not in content
+        # Tool call tokens are preserved (handled by ToolCallStreamParser)
+        assert "<|tool_calls_section_begin|>" in content
 
     def test_content_before_think(self):
         """Content before <think> should be emitted as content."""

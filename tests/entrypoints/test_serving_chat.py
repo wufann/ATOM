@@ -101,11 +101,23 @@ class TestBuildChatResponse:
         assert resp.choices[0]["message"]["content"] == "No thinking here"
         assert "reasoning_content" not in resp.choices[0]["message"]
 
-    def test_tool_call_stripped(self):
-        raw = "Hi<|tool_calls_section_begin|>call<|tool_calls_section_end|>"
+    def test_tool_call_parsed(self):
+        raw = (
+            "Hi"
+            "<|tool_calls_section_begin|>"
+            "<|tool_call_begin|>functions.exec:0"
+            '<|tool_call_argument_begin|>{"cmd": "ls"}'
+            "<|tool_call_end|>"
+            "<|tool_calls_section_end|>"
+        )
         output = self._make_output(text=raw)
         resp = build_chat_response("req-1", "model", raw, output)
         assert resp.choices[0]["message"]["content"] == "Hi"
+        assert "tool_calls" in resp.choices[0]["message"]
+        tc = resp.choices[0]["message"]["tool_calls"][0]
+        assert tc["function"]["name"] == "exec"
+        assert '"cmd"' in tc["function"]["arguments"]
+        assert resp.choices[0]["finish_reason"] == "tool_calls"
 
     def test_timing_in_usage(self):
         output = self._make_output(ttft=0.15, tpot=0.03, latency=0.8)

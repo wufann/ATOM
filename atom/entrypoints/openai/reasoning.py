@@ -27,7 +27,7 @@ def separate_reasoning(text: str) -> Tuple[Optional[str], str]:
     match = re.match(r"<think>(.*?)</think>\s*(.*)", text, flags=re.DOTALL)
     if match:
         reasoning = match.group(1).strip()
-        content = _strip_tool_calls(match.group(2).strip())
+        content = match.group(2).strip()
         return (reasoning if reasoning else None, content)
 
     # Check for unclosed thinking block (truncated response)
@@ -36,26 +36,8 @@ def separate_reasoning(text: str) -> Tuple[Optional[str], str]:
         reasoning = match.group(1).strip()
         return (reasoning if reasoning else None, "")
 
-    # No thinking block
-    return (None, _strip_tool_calls(text))
-
-
-def _strip_tool_calls(text: str) -> str:
-    """Strip raw tool call special tokens from text.
-
-    Models output these when tools are in the prompt but the server
-    doesn't support structured tool calling.
-    """
-    # Strip closed tool call blocks
-    text = re.sub(
-        r"<\|tool_calls_section_begin\|>.*?<\|tool_calls_section_end\|>\s*",
-        "",
-        text,
-        flags=re.DOTALL,
-    )
-    # Strip unclosed tool call blocks
-    text = re.sub(r"<\|tool_calls_section_begin\|>.*$", "", text, flags=re.DOTALL)
-    return text
+    # No thinking block — return content as-is (tool calls parsed separately)
+    return (None, text)
 
 
 @dataclass
@@ -73,7 +55,6 @@ class ReasoningFilter:
 
     state: int = 0
     buf: str = ""
-    in_tool_call: bool = False
 
     def process(self, text: str) -> list:
         """Process a chunk of text and return list of (field, text) tuples.
@@ -133,19 +114,10 @@ class ReasoningFilter:
         return results
 
     def _process_content(self, text: str) -> list:
-        """Process content after thinking, filtering tool call tokens."""
-        results = []
-        if not self.in_tool_call:
-            if "<|tool_calls_section_begin|>" in text:
-                before = text.split("<|tool_calls_section_begin|>")[0]
-                self.in_tool_call = True
-                if before:
-                    results.append(("content", before))
-            elif text:
-                results.append(("content", text))
-        elif "<|tool_calls_section_end|>" in text:
-            self.in_tool_call = False
-        return results
+        """Process content after thinking. Tool calls are handled by ToolCallStreamParser."""
+        if text:
+            return [("content", text)]
+        return []
 
     def flush(self) -> list:
         """Flush any remaining buffered content."""

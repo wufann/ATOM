@@ -15,6 +15,7 @@ from .protocol import (
     ChatCompletionResponse,
 )
 from .reasoning import ReasoningFilter, separate_reasoning
+from .tool_parser import ToolCallStreamParser, parse_tool_calls
 
 logger = logging.getLogger("atom")
 
@@ -22,7 +23,7 @@ logger = logging.getLogger("atom")
 def create_chat_chunk(
     request_id: str,
     model: str,
-    delta: Optional[Dict[str, str]] = None,
+    delta: Optional[Dict[str, Any]] = None,
     finish_reason: Optional[str] = None,
     usage: Optional[Dict] = None,
 ) -> str:
@@ -55,14 +56,18 @@ async def stream_chat_response(
     tokenizer,
     cleanup_fn,
 ) -> AsyncGenerator[str, None]:
-    """Generate streaming chat completion response with reasoning separation.
+    """Generate streaming chat completion response with reasoning and tool calls.
 
-    Yields SSE chunks with reasoning_content and content in separate delta fields,
-    following the SGLang/vLLM pattern.
+    Yields SSE chunks with:
+    - reasoning_content deltas during thinking phase
+    - content deltas for the answer
+    - tool_calls deltas when model invokes tools
     """
     num_tokens_input = len(tokenizer.encode(prompt))
     num_tokens_output = 0
     reasoning_filter = ReasoningFilter()
+    tool_parser = ToolCallStreamParser()
+    has_tool_calls = False
 
     # Send initial role chunk
     yield create_chat_chunk(request_id, model, delta={"role": "assistant"})
@@ -71,31 +76,67 @@ async def stream_chat_response(
         chunk_data = await stream_queue.get()
         new_text = chunk_data["text"]
         num_tokens_output += len(chunk_data.get("token_ids", []))
-        chunk_data.get("finish_reason")
 
-        # Process through reasoning filter
+        # Phase 1: Process through reasoning filter
         segments = reasoning_filter.process(new_text)
         if chunk_data.get("finished", False):
             segments.extend(reasoning_filter.flush())
 
-        # Emit delta chunks for each segment
+        # Phase 2: For content segments, check for tool calls
         for field, text in segments:
-            if text:
-                yield create_chat_chunk(request_id, model, delta={field: text})
+            if field == "reasoning_content":
+                if text:
+                    yield create_chat_chunk(
+                        request_id, model, delta={"reasoning_content": text}
+                    )
+            elif field == "content":
+                # Run through tool parser
+                events = tool_parser.process(text)
+                for event_type, data in events:
+                    if event_type == "content":
+                        yield create_chat_chunk(
+                            request_id, model, delta={"content": data}
+                        )
+                    elif event_type == "tool_call_start":
+                        has_tool_calls = True
+                        yield create_chat_chunk(
+                            request_id,
+                            model,
+                            delta={"tool_calls": [data]},
+                        )
+                    elif event_type == "tool_call_args":
+                        yield create_chat_chunk(
+                            request_id,
+                            model,
+                            delta={"tool_calls": [data]},
+                        )
 
         if chunk_data.get("finished", False):
+            # Flush tool parser
+            for event_type, data in tool_parser.flush():
+                if event_type == "content":
+                    yield create_chat_chunk(request_id, model, delta={"content": data})
+                elif event_type == "tool_call_start":
+                    has_tool_calls = True
+                    yield create_chat_chunk(
+                        request_id, model, delta={"tool_calls": [data]}
+                    )
+                elif event_type == "tool_call_args":
+                    yield create_chat_chunk(
+                        request_id, model, delta={"tool_calls": [data]}
+                    )
             break
 
     cleanup_fn(request_id, seq_id)
 
-    # Final chunks: finish reason + usage
+    # Final chunks
+    finish_reason = "tool_calls" if has_tool_calls else "stop"
     usage = {
         "prompt_tokens": num_tokens_input,
         "completion_tokens": num_tokens_output,
         "total_tokens": num_tokens_input + num_tokens_output,
     }
-    yield create_chat_chunk(request_id, model, finish_reason="stop")
-    # Usage-only chunk
+    yield create_chat_chunk(request_id, model, finish_reason=finish_reason)
     usage_chunk = {
         "id": request_id,
         "object": CHAT_COMPLETION_CHUNK_OBJECT,
@@ -113,12 +154,19 @@ def build_chat_response(
     raw_text: str,
     final_output: Dict[str, Any],
 ) -> ChatCompletionResponse:
-    """Build a non-streaming chat completion response with reasoning separation."""
-    reasoning_content, content = separate_reasoning(raw_text)
+    """Build a non-streaming chat completion response with reasoning and tool calls."""
+    reasoning_content, content_with_tools = separate_reasoning(raw_text)
 
-    message = {"role": "assistant", "content": content}
+    # Parse tool calls from content
+    content, tool_calls = parse_tool_calls(content_with_tools)
+
+    message: Dict[str, Any] = {"role": "assistant", "content": content}
     if reasoning_content is not None:
         message["reasoning_content"] = reasoning_content
+    if tool_calls:
+        message["tool_calls"] = [tc.to_dict() for tc in tool_calls]
+
+    finish_reason = "tool_calls" if tool_calls else final_output["finish_reason"]
 
     return ChatCompletionResponse(
         id=request_id,
@@ -128,7 +176,7 @@ def build_chat_response(
             {
                 "index": 0,
                 "message": message,
-                "finish_reason": final_output["finish_reason"],
+                "finish_reason": finish_reason,
             }
         ],
         usage={
