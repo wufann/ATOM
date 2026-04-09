@@ -119,21 +119,21 @@ jobs:
             "${SGLANG_IMAGE_SOURCE}" >> "$GITHUB_STEP_SUMMARY"
 
           if [[ "${USER_PROVIDED_SGLANG_IMAGE}" == "true" ]]; then
-            printf -- '- User-provided image: `%s`\n- Expected vLLM version: `%s`\n- Expected vLLM commit: `%s`\n' \
+            printf -- '- User-provided image: `%s`\n- Expected SGLang version: `%s`\n- Expected SGLang commit: `%s`\n' \
               "${PREBUILT_SGLANG_IMAGE}" \
               "${SELECTED_SGLANG_VERSION}" \
               "${SELECTED_SGLANG_REF}" >> "$GITHUB_STEP_SUMMARY"
-            printf -- '\nBecause an explicit `oot_image` input was provided, this run uses that image directly and skips branch-based rebuild logic.\n' \
+            printf -- '\nBecause an explicit `sglang_image` input was provided, this run uses that image directly and skips branch-based rebuild logic.\n' \
               >> "$GITHUB_STEP_SUMMARY"
           elif [[ "${REBUILD_SGLANG_IMAGE}" == "true" ]]; then
-            printf -- '- Base image: `%s`\n- vLLM version: `%s`\n- vLLM commit: `%s`\n- vLLM source: `.github/workflows/docker-release.yaml`\n' \
+            printf -- '- Base image: `%s`\n- SGLang version: `%s`\n- SGLang commit: `%s`\n- SGLang source: `.github/workflows/docker-release.yaml`\n' \
               "${SGLANG_BASE_IMAGE}" \
               "${SELECTED_SGLANG_VERSION}" \
               "${SELECTED_SGLANG_REF}" >> "$GITHUB_STEP_SUMMARY"
-            printf -- '\nBecause branch `%s` is not `main` and no `oot_image` override was provided, a custom OOT docker is rebuilt from the selected branch.\n' \
+            printf -- '\nBecause branch `%s` is not `main` and no `sglang_image` override was provided, a custom SGLang docker is rebuilt from the selected branch.\n' \
               "${ATOM_REF}" >> "$GITHUB_STEP_SUMMARY"
           else
-            printf -- '- Prebuilt image: `%s`\n- Expected vLLM version: `%s`\n- Expected vLLM commit: `%s`\n' \
+            printf -- '- Prebuilt image: `%s`\n- Expected SGLang version: `%s`\n- Expected SGLang commit: `%s`\n' \
               "${PREBUILT_SGLANG_IMAGE}" \
               "${SELECTED_SGLANG_VERSION}" \
               "${SELECTED_SGLANG_REF}" >> "$GITHUB_STEP_SUMMARY"
@@ -287,9 +287,7 @@ jobs:
                   if excluded_pairs and pair in excluded_pairs:
                       continue
                   
-                  cell = dict(model)
-                  cell.update(param)
-                  include.append(cell)
+                  include.append({"model": model, "params": param})
 
           print(json.dumps({"include": include}))
           PY
@@ -320,7 +318,7 @@ jobs:
       SGLANG_BASE_IMAGE: ${{ needs.resolve-atom-source.outputs.sglang_base_image }}
       SGLANG_REF: ${{ needs.resolve-atom-source.outputs.selected_sglang_ref }}
       SGLANG_VERSION: ${{ needs.resolve-atom-source.outputs.selected_sglang_version }}
-      OOT_IMAGE_REPO: rocm/atom-dev
+      SGLANG_IMAGE_REPO: rocm/atom-dev
     steps:
       - name: Checkout benchmark ATOM source
         uses: actions/checkout@v6
@@ -334,7 +332,7 @@ jobs:
         run: |
           ATOM_SOURCE_SHA="$(git rev-parse HEAD)"
           echo "atom_source_sha=${ATOM_SOURCE_SHA}" >> "$GITHUB_OUTPUT"
-          printf '### Building custom OOT image\n- Repository: `%s`\n- Ref: `%s`\n- Commit: `%s`\n- Base image: `%s`\n- vLLM version: `%s`\n- vLLM commit: `%s`\n' \
+          printf '### Building custom SGLang image\n- Repository: `%s`\n- Ref: `%s`\n- Commit: `%s`\n- Base image: `%s`\n- SGLang version: `%s`\n- SGLang commit: `%s`\n' \
             "${ATOM_SOURCE_REPOSITORY}" \
             "${ATOM_SOURCE_REF}" \
             "${ATOM_SOURCE_SHA}" \
@@ -346,9 +344,9 @@ jobs:
         run: |
           echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
 
-      - name: Generate custom OOT base Dockerfile
+      - name: Generate custom SGLang base Dockerfile
         run: |
-          cat > Dockerfile.oot-base <<EOF
+          cat > Dockerfile.sglang-base <<EOF
           FROM ${SGLANG_BASE_IMAGE}
           RUN pip install -U lm-eval[api]
           RUN pip show lm-eval || true
@@ -373,20 +371,20 @@ jobs:
           RUN echo "=== ATOM version AFTER installation ===" && pip show atom || true
           EOF
 
-      - name: Build custom OOT base image
+      - name: Build custom SGLang base image
         run: |
           docker build --pull --network=host \
             --no-cache \
             -t atom_sglang_base:ci \
-            -f Dockerfile.oot-base .
+            -f Dockerfile.sglang-base .
 
-      - name: Build custom OOT vLLM image
+      - name: Build custom SGLang image
         id: image-meta
         run: |
           SHORT_SHA="$(git rev-parse --short HEAD)"
-          SHORT_VLLM="$(printf '%s' "${SGLANG_REF}" | cut -c1-12)"
+          SHORT_SGLANG="$(printf '%s' "${SGLANG_REF}" | cut -c1-12)"
           SAFE_SGLANG_VERSION="$(printf '%s' "${SGLANG_VERSION}" | tr '/:' '--')"
-          SGLANG_IMAGE_TAG="${OOT_IMAGE_REPO}:sglang-benchmark-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${SHORT_SHA}-${SAFE_SGLANG_VERSION}-${SHORT_VLLM}"
+          SGLANG_IMAGE_TAG="${SGLANG_IMAGE_REPO}:sglang-benchmark-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${SHORT_SHA}-${SAFE_SGLANG_VERSION}-${SHORT_SGLANG}"
           docker build --network=host \
             --no-cache \
             -t "${SGLANG_IMAGE_TAG}" \
@@ -399,7 +397,7 @@ jobs:
             -f docker/Dockerfile .
           echo "sglang_image_tag=${SGLANG_IMAGE_TAG}" >> "$GITHUB_OUTPUT"
 
-      - name: Push custom OOT image
+      - name: Push custom SGLang image
         run: |
           docker push "${{ steps.image-meta.outputs.sglang_image_tag }}"
 
@@ -591,7 +589,7 @@ jobs:
             echo "/models directory not mounted; skipping model download"
           fi
 
-      - name: Resolve OOT model path
+      - name: Resolve SGLang model path
         if: steps.check.outputs.enabled == 'true'
         run: |
           model_dir="${MODEL_PATH}"
@@ -707,7 +705,7 @@ jobs:
 
           data["random_input_len"] = int(os.environ["ISL"])
           data["random_output_len"] = int(os.environ["OSL"])
-          data["benchmark_backend"] = "ATOM-vLLM"
+          data["benchmark_backend"] = "ATOM-SGLang"
 
           display_name = os.environ.get("DASHBOARD_MODEL_NAME", "")
           if display_name:
@@ -783,7 +781,7 @@ jobs:
           if [[ "${SGLANG_IMAGE_SOURCE}" == "rebuild" ]]; then
             docker rmi "$SGLANG_IMAGE_TAG" || true
           else
-            echo "Keeping prebuilt OOT image cached on runner: ${SGLANG_IMAGE_TAG}"
+            echo "Keeping prebuilt SGLang image cached on runner: ${SGLANG_IMAGE_TAG}"
           fi
 
   summarize-benchmark-result:
@@ -818,12 +816,12 @@ jobs:
       - name: Note summary behavior
         run: |
           if [[ "${{ needs.resolve-atom-source.outputs.publish_to_dashboard }}" == "true" ]]; then
-            printf '### Summary mode\nResults from `%s@%s` using `%s` OOT image mode are shown below as a workflow summary table. Because dashboard upload is enabled for this run, this final Ubuntu summary job collects benchmark artifacts from all completed GPU cases and publishes the available successful results in one pass, then reconciles the completed run for regression comparison.\n' \
+            printf '### Summary mode\nResults from `%s@%s` using `%s` SGLang image mode are shown below as a workflow summary table. Because dashboard upload is enabled for this run, this final Ubuntu summary job collects benchmark artifacts from all completed GPU cases and publishes the available successful results in one pass, then reconciles the completed run for regression comparison.\n' \
               "${{ needs.resolve-atom-source.outputs.atom_repository }}" \
               "${{ needs.resolve-atom-source.outputs.atom_ref }}" \
               "${{ needs.resolve-atom-source.outputs.sglang_image_source }}" >> "$GITHUB_STEP_SUMMARY"
           else
-            printf '### Summary mode\nResults from `%s@%s` using `%s` OOT image mode are shown below as a workflow summary table only. Dashboard upload is disabled for this run.\n' \
+            printf '### Summary mode\nResults from `%s@%s` using `%s` SGLang image mode are shown below as a workflow summary table only. Dashboard upload is disabled for this run.\n' \
               "${{ needs.resolve-atom-source.outputs.atom_repository }}" \
               "${{ needs.resolve-atom-source.outputs.atom_ref }}" \
               "${{ needs.resolve-atom-source.outputs.sglang_image_source }}" >> "$GITHUB_STEP_SUMMARY"
