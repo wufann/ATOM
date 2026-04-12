@@ -35,6 +35,7 @@ from atom.models.utils import (
 )
 from torch import nn
 from transformers import PretrainedConfig
+from atom.utils import envs
 
 # ENABLE_ALLREDUCE_RMSNORM_FUSION = envs.ATOM_ENABLE_ALLREDUCE_RMSNORM_FUSION
 ENABLE_ALLREDUCE_RMSNORM_FUSION = 0
@@ -245,6 +246,7 @@ class MiMoV2Attention(nn.Module):
             per_layer_sliding_window=sliding_window,
             sinks=self.attention_sink_bias,
             prefix=f"{prefix}.attn",
+            # rotary_emb=self.rotary_emb,
             rotary_emb=None,
         )
 
@@ -257,11 +259,11 @@ class MiMoV2Attention(nn.Module):
         q, k, v = torch.split(qkv, [self.q_size, self.k_size, self.v_size], dim=-1)
 
         # Apply RoPE manually (not passed to Attention to avoid fused kernel)
-        q = q.view(-1, self.num_heads, self.head_dim)
-        k = k.view(-1, self.num_kv_heads, self.head_dim)
+        # q = q.view(-1, self.num_heads, self.head_dim)
+        # k = k.view(-1, self.num_kv_heads, self.head_dim)
         q, k = self.rotary_emb(positions, q, k)
-        q = q.view(-1, self.q_size)
-        k = k.view(-1, self.k_size)
+        # q = q.view(-1, self.q_size)
+        # k = k.view(-1, self.k_size)
 
         # Apply v_scale before attention
         if self.v_scale is not None:
@@ -273,7 +275,14 @@ class MiMoV2Attention(nn.Module):
             v = F.pad(v, [0, self.head_dim - self.v_head_dim], value=0)
             v = v.view(-1, self.num_kv_heads * self.head_dim)
 
-        attn_output = self.attn(q, k, v, positions)
+        # if envs.ATOM_ENABLE_QK_NORM_ROPE_CACHE_QUANT_FUSION:
+        if 0:
+            attn_output = self.attn(
+                query=q, key=k, value=v, positions=positions, q_scale=None, qkv=qkv
+            )
+        else:
+            attn_output = self.attn(q, k, v, positions)
+        # attn_output = self.attn(q, k, v, positions)
 
         # Truncate output back to v_head_dim
         if self.v_head_dim != self.head_dim:
