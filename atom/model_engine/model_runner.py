@@ -1287,20 +1287,11 @@ class ModelRunner:
                                 device="cuda",
                             )
                             if config.kv_cache_dtype == "fp8":
-                                module.k_scale = torch.zeros(
-                                    self.num_physical_kvcache_blocks,
-                                    module_kv_heads,
-                                    self.physical_block_size,
-                                    dtype=dtypes.fp32,
-                                    device="cuda",
-                                )
-                                module.v_scale = torch.zeros(
-                                    self.num_physical_kvcache_blocks,
-                                    module_kv_heads,
-                                    self.physical_block_size,
-                                    dtype=dtypes.fp32,
-                                    device="cuda",
-                                )
+                                # Use the impl's scalar kv_scale so that the else-path
+                                # in rope_cache applies global (per-tensor) fp8
+                                # quantization, matching pa_decode_gluon's expectation.
+                                module.k_scale = module.impl.kv_scale
+                                module.v_scale = module.impl.kv_scale
                             self._kv_layer_cache_store.append(
                                 (k_cache, v_cache, module.k_scale, module.v_scale)
                             )

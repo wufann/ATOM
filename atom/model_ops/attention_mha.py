@@ -206,16 +206,34 @@ class PagedAttentionImpl(nn.Module):
             if self.k_norm is not None:
                 k = self.k_norm(k)
             if self.kv_cache_dtype == "fp8":
-                aiter.reshape_and_cache_with_pertoken_quant(
-                    k,
-                    v,
-                    k_cache,
-                    v_cache,
-                    k_scale,
-                    v_scale,
-                    attn_metadata.slot_mapping,
-                    asm_layout=asm_layout,
-                )
+                if use_triton_attn:
+                    # pa_decode_gluon expects a global scalar scale (kv_quant_mode=0),
+                    # matching the fused-kernel path. Use reshape_and_cache with the
+                    # per-tensor kv_scale instead of the per-token variant.
+                    self.per_token_quant = False
+                    k_scale = v_scale = self.kv_scale
+                    aiter.reshape_and_cache(
+                        k,
+                        v,
+                        k_cache,
+                        v_cache,
+                        attn_metadata.slot_mapping,
+                        kv_cache_dtype=self.kv_cache_dtype,
+                        k_scale=k_scale,
+                        v_scale=v_scale,
+                        asm_layout=False,
+                    )
+                else:
+                    aiter.reshape_and_cache_with_pertoken_quant(
+                        k,
+                        v,
+                        k_cache,
+                        v_cache,
+                        k_scale,
+                        v_scale,
+                        attn_metadata.slot_mapping,
+                        asm_layout=asm_layout,
+                    )
             else:
                 aiter.reshape_and_cache(
                     k,
