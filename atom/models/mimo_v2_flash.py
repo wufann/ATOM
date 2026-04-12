@@ -245,7 +245,7 @@ class MiMoV2Attention(nn.Module):
             per_layer_sliding_window=sliding_window,
             sinks=self.attention_sink_bias,
             prefix=f"{prefix}.attn",
-            rotary_emb=self.rotary_emb,
+            rotary_emb=None,
         )
 
     def forward(
@@ -256,7 +256,12 @@ class MiMoV2Attention(nn.Module):
         qkv = self.qkv_proj(hidden_states)
         q, k, v = torch.split(qkv, [self.q_size, self.k_size, self.v_size], dim=-1)
 
-        # RoPE is applied inside Attention (via fused_qk_rope_reshape_and_cache)
+        # Apply RoPE manually (not passed to Attention to avoid fused kernel)
+        q = q.view(-1, self.num_heads, self.head_dim)
+        k = k.view(-1, self.num_kv_heads, self.head_dim)
+        q, k = self.rotary_emb(positions, q, k)
+        q = q.view(-1, self.q_size)
+        k = k.view(-1, self.k_size)
 
         # Apply v_scale before attention
         if self.v_scale is not None:
