@@ -36,17 +36,10 @@ from atom.models.utils import (
 from torch import nn
 from transformers import PretrainedConfig
 from atom.utils import envs
+from atom.utils.decorators import support_torch_compile
 
 # ENABLE_ALLREDUCE_RMSNORM_FUSION = envs.ATOM_ENABLE_ALLREDUCE_RMSNORM_FUSION
 ENABLE_ALLREDUCE_RMSNORM_FUSION = 0
-
-
-def print_rank0(*args, **kwargs):
-    import torch.distributed as dist
-
-    if dist.get_rank() == 0:
-        print(*args, **kwargs, flush=True)
-
 
 class MiMoV2MLP(nn.Module):
     def __init__(
@@ -388,7 +381,6 @@ class MiMoV2FlashDecoderLayer(nn.Module):
         hidden_states: torch.Tensor,
         residual: torch.Tensor | None,
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        print_rank0(f"======layerid{self.layer_idx}=====")
         if residual is None:
             residual = hidden_states
             hidden_states = self.input_layernorm(hidden_states)
@@ -416,7 +408,7 @@ class MiMoV2FlashDecoderLayer(nn.Module):
         return self.config.hybrid_layer_pattern[self.layer_idx] == 1
 
 
-# @support_torch_compile
+@support_torch_compile
 class MiMoV2Model(nn.Module):
     def __init__(
         self,
@@ -472,7 +464,6 @@ class MiMoV2Model(nn.Module):
                 hidden_states = inputs_embeds
             else:
                 hidden_states = self.get_input_embeddings(input_ids)
-            print_rank0(f"=== embedding out: {hidden_states}")
             residual = None
         else:
             assert intermediate_tensors is not None
@@ -487,7 +478,6 @@ class MiMoV2Model(nn.Module):
                 {"hidden_states": hidden_states, "residual": residual}
             )
         hidden_states, _ = self.norm(hidden_states, residual)
-        print_rank0(f"=== final norm out: {hidden_states}")
 
         return hidden_states
 
@@ -550,7 +540,6 @@ class MiMoV2FlashForCausalLM(nn.Module):
         intermediate_tensors: IntermediateTensors | None = None,
         inputs_embeds: torch.Tensor | None = None,
     ) -> Union[torch.Tensor, IntermediateTensors]:
-        print_rank0(f"=== input_ids: {input_ids}, positions: {positions} ===")
         hidden_states = self.model(
             input_ids=input_ids,
             positions=positions,
@@ -564,9 +553,6 @@ class MiMoV2FlashForCausalLM(nn.Module):
         hidden_states: torch.Tensor,
     ) -> Optional[torch.Tensor]:
         logits = self.lm_head(hidden_states)
-        print_rank0(
-            f"=== logits shape: {logits.shape}, top5 vals: {logits.topk(5).values}, top5 ids: {logits.topk(5).indices} ==="
-        )
         return logits
 
     def get_expert_mapping(self) -> list[tuple[str, str, int, str]]:

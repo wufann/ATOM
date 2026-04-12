@@ -1009,22 +1009,28 @@ class ModelRunner:
             )
             block_bytes += self.num_gdn_attn_state * one_layer_byte
         else:
-            # Standard attention: kv_cache [2, num_hidden_layers, blocks, ...]
-            # Note: allocate_kv_cache uses hf_config.num_hidden_layers for
-            # the standard path (draft layers use separate binding).
+            # Standard attention: per-layer allocation; use max kv_heads across
+            # all layer types as a conservative upper bound.
+            _swa_raw = getattr(hf_config, "swa_num_key_value_heads", 0)
+            _swa_per_rank = (
+                _swa_raw // self.world_size
+                if _swa_raw >= self.world_size
+                else (1 if _swa_raw else 0)
+            )
+            max_kv_heads = max(num_kv_heads, _swa_per_rank)
             block_bytes = (
                 2
                 * hf_config.num_hidden_layers
                 * self.block_size
-                * num_kv_heads
+                * max_kv_heads
                 * hf_config.head_dim
                 * kv_dtype_size
             )
-            # kv_scale: [2, num_hidden_layers, blocks, kv_heads, phys_block_size]
+            # kv_scale: per-layer, use max kv_heads as upper bound
             block_bytes += (
                 2
                 * hf_config.num_hidden_layers
-                * num_kv_heads
+                * max_kv_heads
                 * self.physical_block_size
                 * 4  # float32
             )
@@ -1206,26 +1212,12 @@ class ModelRunner:
                 device="cuda",
             )
         else:
-            self.kv_cache = torch.zeros(
-                2,
-                hf_config.num_hidden_layers,
-                self.num_physical_kvcache_blocks,
-                self.physical_block_size,
-                num_kv_heads,
-                hf_config.head_dim,
-                dtype=dtypes.d_dtypes[config.kv_cache_dtype],
-                device="cuda",
-            )
-
-            self.kv_scale = torch.zeros(
-                2,
-                hf_config.num_hidden_layers,
-                self.num_physical_kvcache_blocks,
-                num_kv_heads,
-                self.physical_block_size,
-                dtype=dtypes.fp32,
-                device="cuda",
-            )
+            # Per-layer allocation: defer to the binding loop so each layer
+            # gets the exact num_kv_heads its attention module needs.
+            self.kv_cache = None
+            self.kv_scale = None
+            # Keep references to per-layer tensors so they are not GC'd.
+            self._kv_layer_cache_store = []
         # Build KVCacheConfig
         # lirong TODO: This is a simple solution to build KVCacheConfig,
         # models with only one type of attention, but not support multi-type of attention models.
@@ -1238,7 +1230,8 @@ class ModelRunner:
 
         kv_cache_tensors = []
         layer_id = 0
-        x = 16 // self.kv_cache.element_size()
+        _kv_dtype = dtypes.d_dtypes[config.kv_cache_dtype]
+        x = 16 // _kv_dtype.itemsize
         for model_name, model in models_to_bind:
             logger.info(
                 f"Binding KV cache for {model_name} model starting at layer_id={layer_id}"
@@ -1253,24 +1246,66 @@ class ModelRunner:
                             attn_idx = layer_id // self.full_attention_interval
                         else:
                             attn_idx = layer_id
-                        k_cache = self.kv_cache[0, attn_idx].view(
-                            self.num_physical_kvcache_blocks,
-                            num_kv_heads,
-                            hf_config.head_dim // x,
-                            self.physical_block_size,
-                            x,
-                        )
-                        v_cache = self.kv_cache[1, attn_idx].view(
-                            self.num_physical_kvcache_blocks,
-                            num_kv_heads,
-                            hf_config.head_dim,
-                            self.physical_block_size,
-                        )
-                        module.max_model_len = self.config.max_model_len
-                        if config.kv_cache_dtype == "fp8":
-                            module.k_scale = self.kv_scale[0, attn_idx]
-                            module.v_scale = self.kv_scale[1, attn_idx]
 
+                        if self.kv_cache is not None:
+                            # Single-tensor path (original behavior)
+                            k_cache = self.kv_cache[0, attn_idx].view(
+                                self.num_physical_kvcache_blocks,
+                                num_kv_heads,
+                                hf_config.head_dim // x,
+                                self.physical_block_size,
+                                x,
+                            )
+                            v_cache = self.kv_cache[1, attn_idx].view(
+                                self.num_physical_kvcache_blocks,
+                                num_kv_heads,
+                                hf_config.head_dim,
+                                self.physical_block_size,
+                            )
+                            if config.kv_cache_dtype == "fp8":
+                                module.k_scale = self.kv_scale[0, attn_idx]
+                                module.v_scale = self.kv_scale[1, attn_idx]
+                        else:
+                            # Per-layer allocation: each module gets its own
+                            # correctly-sized tensor matching its num_kv_heads.
+                            module_kv_heads = module.num_kv_heads
+                            k_cache = torch.zeros(
+                                self.num_physical_kvcache_blocks,
+                                module_kv_heads,
+                                hf_config.head_dim // x,
+                                self.physical_block_size,
+                                x,
+                                dtype=_kv_dtype,
+                                device="cuda",
+                            )
+                            v_cache = torch.zeros(
+                                self.num_physical_kvcache_blocks,
+                                module_kv_heads,
+                                hf_config.head_dim,
+                                self.physical_block_size,
+                                dtype=_kv_dtype,
+                                device="cuda",
+                            )
+                            if config.kv_cache_dtype == "fp8":
+                                module.k_scale = torch.zeros(
+                                    self.num_physical_kvcache_blocks,
+                                    module_kv_heads,
+                                    self.physical_block_size,
+                                    dtype=dtypes.fp32,
+                                    device="cuda",
+                                )
+                                module.v_scale = torch.zeros(
+                                    self.num_physical_kvcache_blocks,
+                                    module_kv_heads,
+                                    self.physical_block_size,
+                                    dtype=dtypes.fp32,
+                                    device="cuda",
+                                )
+                            self._kv_layer_cache_store.append(
+                                (k_cache, v_cache, module.k_scale, module.v_scale)
+                            )
+
+                        module.max_model_len = self.config.max_model_len
                         k_scale = module.k_scale
                         v_scale = module.v_scale
 
