@@ -61,6 +61,7 @@ support_model_arch_dict = {
     "Qwen3NextForCausalLM": "atom.models.qwen3_next.Qwen3NextForCausalLM",
     "KimiK25ForConditionalGeneration": "atom.models.kimi_k25.KimiK25ForCausalLM",
     "MiniMaxM2ForCausalLM": "atom.models.minimax_m2.MiniMaxM2ForCausalLM",
+    "MiMoV2FlashForCausalLM": "atom.models.mimo_v2_flash.MiMoV2FlashForCausalLM",
 }
 # seed = 34567
 # np.random.seed(seed)
@@ -634,6 +635,13 @@ class ModelRunner:
             return True
         return False
 
+    def is_mimo_v2(self) -> bool:
+        if not hasattr(self.hf_text_config, "model_type"):
+            return False
+        elif self.hf_text_config.model_type in ("mimo_v2_flash"):
+            return True
+        return False
+
     def _make_buffer(
         self, *size: Union[int, torch.SymInt], dtype: torch.dtype, numpy: bool = True
     ) -> CpuGpuBuffer:
@@ -1007,6 +1015,32 @@ class ModelRunner:
                 sum(math.prod(subtuple) for subtuple in mamba_shape) * kv_dtype_size
             )
             block_bytes += self.num_gdn_attn_state * one_layer_byte
+        elif self.is_mimo_v2():
+            # MiMo-V2-Flash has mixed attention types (full + SWA) with
+            # different num_kv_heads per layer. Use the max across layer
+            # types as a conservative upper bound for memory estimation.
+            _swa_raw = getattr(hf_config, "swa_num_key_value_heads", 0)
+            _swa_per_rank = (
+                _swa_raw // self.world_size
+                if _swa_raw >= self.world_size
+                else (1 if _swa_raw else 0)
+            )
+            max_kv_heads = max(num_kv_heads, _swa_per_rank)
+            block_bytes = (
+                2
+                * hf_config.num_hidden_layers
+                * self.block_size
+                * max_kv_heads
+                * hf_config.head_dim
+                * kv_dtype_size
+            )
+            block_bytes += (
+                2
+                * hf_config.num_hidden_layers
+                * max_kv_heads
+                * self.physical_block_size
+                * 4  # float32
+            )
         else:
             # Standard attention: kv_cache [2, num_hidden_layers, blocks, ...]
             # Note: allocate_kv_cache uses hf_config.num_hidden_layers for
@@ -1204,6 +1238,13 @@ class ModelRunner:
                 dtype=dtypes.d_dtypes[config.kv_cache_dtype],
                 device="cuda",
             )
+        elif self.is_mimo_v2():
+            # MiMo-V2-Flash: per-layer allocation deferred to the binding
+            # loop, so each layer gets the exact num_kv_heads it needs.
+            self.kv_cache = None
+            self.kv_scale = None
+            # Keep references to per-layer tensors so they are not GC'd.
+            self._kv_layer_cache_store = []
         else:
             self.kv_cache = torch.zeros(
                 2,
@@ -1252,24 +1293,58 @@ class ModelRunner:
                             attn_idx = layer_id // self.full_attention_interval
                         else:
                             attn_idx = layer_id
-                        k_cache = self.kv_cache[0, attn_idx].view(
-                            self.num_physical_kvcache_blocks,
-                            num_kv_heads,
-                            hf_config.head_dim // x,
-                            self.physical_block_size,
-                            x,
-                        )
-                        v_cache = self.kv_cache[1, attn_idx].view(
-                            self.num_physical_kvcache_blocks,
-                            num_kv_heads,
-                            hf_config.head_dim,
-                            self.physical_block_size,
-                        )
-                        module.max_model_len = self.config.max_model_len
-                        if config.kv_cache_dtype == "fp8":
-                            module.k_scale = self.kv_scale[0, attn_idx]
-                            module.v_scale = self.kv_scale[1, attn_idx]
 
+                        if self.is_mimo_v2():
+                            # Per-layer allocation: each module gets its own
+                            # correctly-sized tensor matching its num_kv_heads.
+                            _kv_dtype = dtypes.d_dtypes[config.kv_cache_dtype]
+                            _x = 16 // _kv_dtype.itemsize
+                            module_kv_heads = module.num_kv_heads
+                            k_cache = torch.zeros(
+                                self.num_physical_kvcache_blocks,
+                                module_kv_heads,
+                                hf_config.head_dim // _x,
+                                self.physical_block_size,
+                                _x,
+                                dtype=_kv_dtype,
+                                device="cuda",
+                            )
+                            v_cache = torch.zeros(
+                                self.num_physical_kvcache_blocks,
+                                module_kv_heads,
+                                hf_config.head_dim,
+                                self.physical_block_size,
+                                dtype=_kv_dtype,
+                                device="cuda",
+                            )
+                            if config.kv_cache_dtype == "fp8":
+                                # Use the impl's scalar kv_scale so that the else-path
+                                # in rope_cache applies global (per-tensor) fp8
+                                # quantization, matching pa_decode_gluon's expectation.
+                                module.k_scale = module.impl.kv_scale
+                                module.v_scale = module.impl.kv_scale
+                            self._kv_layer_cache_store.append(
+                                (k_cache, v_cache, module.k_scale, module.v_scale)
+                            )
+                        else:
+                            k_cache = self.kv_cache[0, attn_idx].view(
+                                self.num_physical_kvcache_blocks,
+                                num_kv_heads,
+                                hf_config.head_dim // x,
+                                self.physical_block_size,
+                                x,
+                            )
+                            v_cache = self.kv_cache[1, attn_idx].view(
+                                self.num_physical_kvcache_blocks,
+                                num_kv_heads,
+                                hf_config.head_dim,
+                                self.physical_block_size,
+                            )
+                            if config.kv_cache_dtype == "fp8":
+                                module.k_scale = self.kv_scale[0, attn_idx]
+                                module.v_scale = self.kv_scale[1, attn_idx]
+
+                        module.max_model_len = self.config.max_model_len
                         k_scale = module.k_scale
                         v_scale = module.v_scale
 
