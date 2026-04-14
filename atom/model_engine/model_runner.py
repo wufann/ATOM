@@ -1243,7 +1243,6 @@ class ModelRunner:
             # loop, so each layer gets the exact num_kv_heads it needs.
             self.kv_cache = None
             self.kv_scale = None
-            # Keep references to per-layer tensors so they are not GC'd.
             self._kv_layer_cache_store = []
         else:
             self.kv_cache = torch.zeros(
@@ -1278,11 +1277,9 @@ class ModelRunner:
 
         kv_cache_tensors = []
         layer_id = 0
-        _is_mimo = self.is_mimo_v2()
-        if _is_mimo:
+        if self.is_mimo_v2():
             kv_dtype = dtypes.d_dtypes[config.kv_cache_dtype]
             x = 16 // kv_dtype.itemsize
-            # x = _x
         else:
             x = 16 // self.kv_cache.element_size()
         for model_name, model in models_to_bind:
@@ -1300,7 +1297,7 @@ class ModelRunner:
                         else:
                             attn_idx = layer_id
 
-                        if _is_mimo:
+                        if self.is_mimo_v2():
                             # Per-layer allocation: each module gets its own
                             # correctly-sized tensor matching its num_kv_heads.
                             module_kv_heads = module.num_kv_heads
