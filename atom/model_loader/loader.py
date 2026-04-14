@@ -35,6 +35,10 @@ from atom.model_ops.moe import (
 )
 from aiter.dist.parallel_state import get_tp_group
 from atom.models.qwen3_next_mtp import remap_mtp_weight_name
+from atom.models.mimo_v2_flash_mtp import (
+    get_mimo_v2_spec_layer_idx,
+    rewrite_mimo_v2_spec_layer_name,
+)
 
 from atom.plugin.prepare import is_sglang
 
@@ -324,6 +328,12 @@ def load_model(
                     if remapped_name is None:
                         continue
                     name = remapped_name
+                elif hf_config.model_type == "mimo_v2_flash_mtp":
+                    spec_layer = get_mimo_v2_spec_layer_idx(hf_config, name)
+                    if spec_layer is None:
+                        continue
+                    if spec_layer >= 0:  # -1 = shared weight, pass through
+                        name = rewrite_mimo_v2_spec_layer_name(spec_layer, name)
             for mapping_part in weights_mapping.keys():
                 if mapping_part in name:
                     name = name.replace(mapping_part, weights_mapping[mapping_part])

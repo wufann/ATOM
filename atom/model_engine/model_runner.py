@@ -1028,7 +1028,7 @@ class ModelRunner:
             max_kv_heads = max(num_kv_heads, _swa_per_rank)
             block_bytes = (
                 2
-                * hf_config.num_hidden_layers
+                * total_num_layers
                 * self.block_size
                 * max_kv_heads
                 * hf_config.head_dim
@@ -1036,7 +1036,7 @@ class ModelRunner:
             )
             block_bytes += (
                 2
-                * hf_config.num_hidden_layers
+                * total_num_layers
                 * max_kv_heads
                 * self.physical_block_size
                 * 4  # float32
@@ -1280,9 +1280,9 @@ class ModelRunner:
         layer_id = 0
         _is_mimo = self.is_mimo_v2()
         if _is_mimo:
-            _kv_dtype = dtypes.d_dtypes[config.kv_cache_dtype]
-            _x = 16 // _kv_dtype.itemsize
-            x = _x
+            kv_dtype = dtypes.d_dtypes[config.kv_cache_dtype]
+            x = 16 // kv_dtype.itemsize
+            # x = _x
         else:
             x = 16 // self.kv_cache.element_size()
         for model_name, model in models_to_bind:
@@ -1307,10 +1307,10 @@ class ModelRunner:
                             k_cache = torch.zeros(
                                 self.num_physical_kvcache_blocks,
                                 module_kv_heads,
-                                hf_config.head_dim // _x,
+                                hf_config.head_dim // x,
                                 self.physical_block_size,
-                                _x,
-                                dtype=_kv_dtype,
+                                x,
+                                dtype=kv_dtype,
                                 device="cuda",
                             )
                             v_cache = torch.zeros(
@@ -1318,7 +1318,7 @@ class ModelRunner:
                                 module_kv_heads,
                                 hf_config.head_dim,
                                 self.physical_block_size,
-                                dtype=_kv_dtype,
+                                dtype=kv_dtype,
                                 device="cuda",
                             )
                             if config.kv_cache_dtype == "fp8":

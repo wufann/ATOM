@@ -16,6 +16,7 @@ logger = logging.getLogger("atom")
 support_eagle_model_arch_dict = {
     "DeepSeekMTPModel": "atom.models.deepseek_mtp.DeepSeekMTP",
     "Qwen3NextMTPModel": "atom.models.qwen3_next_mtp.Qwen3NextMTP",
+    "MiMoV2FlashMTPModel": "atom.models.mimo_v2_flash_mtp.MiMoV2FlashMTP",
 }
 
 
@@ -129,17 +130,19 @@ class EagleProposer:
                     input_ids=input_ids,
                     positions=positions,
                     hidden_states=hidden_states,
+                    spec_step_idx=i,
                 )
                 sample_hidden_states = (
                     torch.index_select(ret_hidden_states, 0, last_token_indices)
                     if i == 0
                     else ret_hidden_states
                 )
-                logits = self.model.compute_logits(sample_hidden_states)
+                logits = self.model.compute_logits(sample_hidden_states, spec_step_idx=i)
                 new_draft_ids = logits.argmax(dim=-1)
                 draft_token_ids[:, i] = new_draft_ids
 
                 if i < self.mtp_k - 1:
+                    use_mla = self.runner.use_mla
                     do_attn_metadata_update = (
                         not context.is_prefill
                         # TODO: FIX this condition after we support3 attention head numbers=32
@@ -153,20 +156,28 @@ class EagleProposer:
                         slot_mapping = var["slot_mapping"].gpu[
                             : bs * attn_metadata.max_seqlen_q
                         ]
-                        kv_last_page_lens = var["kv_last_page_lens"].gpu[:bs]
                         cu_seqlens_q = var["cu_seqlens_q"].gpu[: bs + 1]
                         attn_metadata.kv_indptr = kv_indptr
                         attn_metadata.kv_indices = kv_indices
                         attn_metadata.cu_seqlens_q = cu_seqlens_q
                         attn_metadata.slot_mapping = slot_mapping
-                        attn_metadata.kv_last_page_lens = kv_last_page_lens
+                        if use_mla:
+                            kv_last_page_lens = var["kv_last_page_lens"].gpu[:bs]
+                            attn_metadata.kv_last_page_lens = kv_last_page_lens
                         cu_seqlens_q[: bs + 1] = self.arrange_bs[: bs + 1]
-                        kv_indptr[1 : bs + 1] -= torch.cumsum(num_reject_tokens, dim=0)
+                        if use_mla:
+                            # MLA: block_size=1, kv_indptr tracks tokens
+                            kv_indptr[1 : bs + 1] -= torch.cumsum(
+                                num_reject_tokens, dim=0
+                            )
                         positions = torch.gather(positions, 0, last_token_indices)
                         context.is_prefill = False
 
                     # update metadata
                     attn_metadata.max_seqlen_k += 1
+                    if not use_mla:
+                        # MHA: update context_lens for this draft step
+                        attn_metadata.context_lens[:bs] += 1
                     workinfos = self.runner.attn_metadata_builder.prepare_mtp_decode(
                         bs,
                         (

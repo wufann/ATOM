@@ -697,6 +697,8 @@ class SpeculativeConfig:
             hf_config.model_type = "deepseek_mtp"
         if hf_config.model_type == "qwen3_next":
             hf_config.model_type = "qwen3_next_mtp"
+        if hf_config.model_type == "mimo_v2_flash":
+            hf_config.model_type = "mimo_v2_flash_mtp"
 
         if hf_config.model_type == "deepseek_mtp":
             # DeepSeek MTP typically uses only 1 layer that gets reused
@@ -725,6 +727,17 @@ class SpeculativeConfig:
                 n_predict = 1
             hf_config.update(
                 {"n_predict": n_predict, "architectures": ["Qwen3NextMTPModel"]}
+            )
+        if hf_config.model_type == "mimo_v2_flash_mtp":
+            # MiMo-V2-Flash has 3 independent MTP layers (not reused like DeepSeek).
+            # Default to 3 if not specified in config.
+            n_predict = getattr(hf_config, "num_nextn_predict_layers", 3)
+            hf_config.update(
+                {
+                    "n_predict": n_predict,
+                    "num_nextn_predict_layers": n_predict,
+                    "architectures": ["MiMoV2FlashMTPModel"],
+                }
             )
         logger.info(f"hf config is: {hf_config}")
 
