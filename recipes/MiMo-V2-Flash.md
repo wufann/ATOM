@@ -34,6 +34,7 @@ python -m atom.entrypoints.openai_server \
 ### Serving with MTP Speculative Decoding
 
 ```bash
+# only support num-speculative-tokens=1 now
 python -m atom.entrypoints.openai_server \
   --model XiaomiMiMo/MiMo-V2-Flash \
   --kv_cache_dtype fp8 -tp 4 --trust-remote-code \
@@ -72,4 +73,11 @@ lm_eval \
   --model_args model=XiaomiMiMo/MiMo-V2-Flash,base_url=http://localhost:8000/v1/completions,num_concurrent=64,max_retries=3,tokenized_requests=False \
   --tasks gsm8k \
   --num_fewshot 5
+```
+Here is the reference value when deploying with tp4 fp8 kvcache:
+```bash
+|Tasks|Version|     Filter     |n-shot|  Metric   |   |Value |   |Stderr|
+|-----|------:|----------------|-----:|-----------|---|-----:|---|-----:|
+|gsm8k|      3|flexible-extract|     5|exact_match|↑  |0.8279|±  |0.0104|
+|     |       |strict-match    |     5|exact_match|↑  |0.8211|±  |0.0106|
 ```
