@@ -137,7 +137,9 @@ class EagleProposer:
                     if i == 0
                     else ret_hidden_states
                 )
-                logits = self.model.compute_logits(sample_hidden_states, spec_step_idx=i)
+                logits = self.model.compute_logits(
+                    sample_hidden_states, spec_step_idx=i
+                )
                 new_draft_ids = logits.argmax(dim=-1)
                 draft_token_ids[:, i] = new_draft_ids
 

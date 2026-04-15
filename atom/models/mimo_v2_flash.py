@@ -37,6 +37,7 @@ from torch import nn
 from transformers import PretrainedConfig
 from atom.utils.decorators import support_torch_compile
 
+
 class MiMoV2MLP(nn.Module):
     def __init__(
         self,

@@ -3,12 +3,12 @@
 """Inference-only MiMo-V2-Flash MTP (Multi-Token Prediction) model."""
 
 import re
-from typing import Optional, Union
+from typing import Optional
 
 import torch
 import torch.nn as nn
 from aiter.dist.communication_op import tensor_model_parallel_all_reduce
-from atom.config import Config, QuantizationConfig
+from atom.config import Config
 from atom.model_ops.embed_head import ParallelLMHead, VocabParallelEmbedding
 from atom.model_ops.layernorm import RMSNorm
 from atom.models.utils import IntermediateTensors, maybe_prefix
@@ -262,7 +262,9 @@ _PREDICTOR_LEVEL_WEIGHTS = {"enorm", "hnorm", "eh_proj", "final_layernorm"}
 _SHARED_WEIGHT_NAMES = {"embed_tokens"}
 
 
-def get_mimo_v2_spec_layer_idx(config: PretrainedConfig, weight_name: str) -> Optional[int]:
+def get_mimo_v2_spec_layer_idx(
+    config: PretrainedConfig, weight_name: str
+) -> Optional[int]:
     """Check if a weight belongs to an MTP layer or is a shared weight.
 
     Returns the target layer index for MTP layer weights, or -1 for shared
@@ -309,7 +311,7 @@ def rewrite_mimo_v2_spec_layer_name(spec_layer: int, name: str) -> str:
     match = _MTP_LAYER_PATTERN.match(name)
     if match is not None:
         prefix = match.group(0)  # e.g. "model.mtp.layers.0."
-        suffix = name[len(prefix):]  # everything after the prefix
+        suffix = name[len(prefix) :]  # everything after the prefix
 
         # Shared weights promoted to top level
         for weight_name in _SHARED_WEIGHT_NAMES:
