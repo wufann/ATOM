@@ -104,9 +104,7 @@ class MiMoV2MoE(nn.Module):
         )
         # Gate weights in fp32 for routing precision
         old_wlp = self.gate.weight.weight_loader_process
-        self.gate.weight = atom_parameter(
-            self.gate.weight.data.to(torch.float32)
-        )
+        self.gate.weight = atom_parameter(self.gate.weight.data.to(torch.float32))
         self.gate.weight.weight_loader_process = old_wlp
 
         # Attach to self.gate so the parameter path matches the checkpoint:
