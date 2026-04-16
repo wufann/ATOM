@@ -26,6 +26,7 @@ from atom.model_ops.linear import (
     RowParallelLinear,
 )
 from atom.model_ops.moe import FusedMoE
+from atom.model_ops.utils import atom_parameter
 from atom.models.utils import (
     IntermediateTensors,
     PPMissingLayer,
@@ -103,14 +104,14 @@ class MiMoV2MoE(nn.Module):
         )
         # Gate weights in fp32 for routing precision
         old_wlp = self.gate.weight.weight_loader_process
-        self.gate.weight = nn.Parameter(
-            self.gate.weight.data.to(torch.float32), requires_grad=False
+        self.gate.weight = atom_parameter(
+            self.gate.weight.data.to(torch.float32)
         )
         self.gate.weight.weight_loader_process = old_wlp
 
         # Attach to self.gate so the parameter path matches the checkpoint:
         # model.layers.N.mlp.gate.e_score_correction_bias
-        self.gate.e_score_correction_bias = nn.Parameter(
+        self.gate.e_score_correction_bias = atom_parameter(
             torch.zeros(self.num_experts, dtype=torch.float32)
         )
 
@@ -218,9 +219,7 @@ class MiMoV2Attention(nn.Module):
         )
 
         self.attention_sink_bias = (
-            nn.Parameter(
-                torch.empty(self.num_heads, requires_grad=False),
-            )
+            atom_parameter(torch.empty(self.num_heads))
             if add_swa_attention_sink_bias
             else None
         )
