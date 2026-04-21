@@ -19,6 +19,10 @@ on:
         description: "gpt-oss-120b TP1"
         type: boolean
         default: false
+      glm-5-1-fp8-tp8:
+        description: "GLM-5.1-FP8 TP8"
+        type: boolean
+        default: false
       kimi-k2-thinking-mxfp4-tp4:
         description: "Kimi-K2-Thinking-MXFP4 TP4"
         type: boolean
@@ -57,6 +61,10 @@ on:
         default: false
       qwen3-5-397b-a17b-fp8:
         description: "Qwen3.5-397B-A17B-FP8 TP8"
+        type: boolean
+        default: false
+      qwen3-5-397b-a17b-mxfp4:
+        description: "Qwen3.5-397B-A17B-MXFP4 TP4"
         type: boolean
         default: false
       qwen3-next-80b-a3b-instruct-fp8-tp1:
@@ -155,7 +163,7 @@ jobs:
             USER_PROVIDED_OOT_IMAGE=true
           elif [[ "${NORMALIZED_REF}" == "main" ]]; then
             if RESOLUTION_JSON="$(
-              python3 .github/scripts/resolve_vllm_atom_image.py \
+              python3 .github/scripts/resolve_atom_image.py \
                 --repository rocm/atom-dev \
                 --reference-tag vllm-latest \
                 --preferred-version "${SELECTED_VLLM_VERSION}"
@@ -315,6 +323,7 @@ jobs:
           ENABLE_DEEPSEEK_R1_FP8: ${{ inputs.deepseek-r1-fp8 }}
           ENABLE_DEEPSEEK_R1_MXFP4: ${{ inputs.deepseek-r1-mxfp4 }}
           ENABLE_GPT_OSS_120B: ${{ inputs.gpt-oss-120b }}
+          ENABLE_GLM_5_1_FP8_TP8: ${{ inputs.glm-5-1-fp8-tp8 }}
           ENABLE_KIMI_K2_TP4: ${{ inputs.kimi-k2-thinking-mxfp4-tp4 }}
           ENABLE_KIMI_K2_TP8: ${{ inputs.kimi-k2-thinking-mxfp4-tp8 }}
           ENABLE_KIMI_K25_TP4: ${{ inputs.kimi-k2-5-mxfp4-tp4 }}
@@ -325,6 +334,7 @@ jobs:
           ENABLE_QWEN3_5_397B_A17B_FP8_TP2: ${{ inputs.qwen3-5-397b-a17b-fp8-tp2 }}
           ENABLE_QWEN3_5_397B_A17B_FP8_TP4: ${{ inputs.qwen3-5-397b-a17b-fp8-tp4 }}
           ENABLE_QWEN3_5_397B_A17B_FP8: ${{ inputs.qwen3-5-397b-a17b-fp8 }}
+          ENABLE_QWEN3_5_397B_A17B_MXFP4: ${{ inputs.qwen3-5-397b-a17b-mxfp4 }}
           ENABLE_QWEN3_NEXT_80B_A3B_INSTRUCT_FP8_TP1: ${{ inputs.qwen3-next-80b-a3b-instruct-fp8-tp1 }}
           ENABLE_QWEN3_NEXT_80B_A3B_INSTRUCT_FP8_TP4: ${{ inputs.qwen3-next-80b-a3b-instruct-fp8-tp4 }}
         run: |
@@ -333,6 +343,7 @@ jobs:
               (.prefix == "deepseek-r1-fp8" and env.ENABLE_DEEPSEEK_R1_FP8 == "true")
               or (.prefix == "deepseek-r1-mxfp4" and env.ENABLE_DEEPSEEK_R1_MXFP4 == "true")
               or (.prefix == "gpt-oss-120b" and env.ENABLE_GPT_OSS_120B == "true")
+              or (.prefix == "glm-5-1-fp8-tp8" and env.ENABLE_GLM_5_1_FP8_TP8 == "true")
               or (.prefix == "kimi-k2-thinking-mxfp4-tp4" and env.ENABLE_KIMI_K2_TP4 == "true")
               or (.prefix == "kimi-k2-thinking-mxfp4-tp8" and env.ENABLE_KIMI_K2_TP8 == "true")
               or (.prefix == "kimi-k25-mxfp4-tp4" and env.ENABLE_KIMI_K25_TP4 == "true")
@@ -343,6 +354,7 @@ jobs:
               or (.prefix == "qwen3-5-397b-a17b-fp8-tp2" and env.ENABLE_QWEN3_5_397B_A17B_FP8_TP2 == "true")
               or (.prefix == "qwen3-5-397b-a17b-fp8-tp4" and env.ENABLE_QWEN3_5_397B_A17B_FP8_TP4 == "true")
               or (.prefix == "qwen3-5-397b-a17b-fp8" and env.ENABLE_QWEN3_5_397B_A17B_FP8 == "true")
+              or (.prefix == "qwen3-5-397b-a17b-mxfp4" and env.ENABLE_QWEN3_5_397B_A17B_MXFP4 == "true")
               or (.prefix == "qwen3-next-80b-a3b-instruct-fp8-tp1" and env.ENABLE_QWEN3_NEXT_80B_A3B_INSTRUCT_FP8_TP1 == "true")
               or (.prefix == "qwen3-next-80b-a3b-instruct-fp8-tp4" and env.ENABLE_QWEN3_NEXT_80B_A3B_INSTRUCT_FP8_TP4 == "true")
             ))
@@ -583,6 +595,7 @@ jobs:
             deepseek-r1-fp8) echo "enabled=${{ inputs.deepseek-r1-fp8 }}" >> "$GITHUB_OUTPUT" ;;
             deepseek-r1-mxfp4) echo "enabled=${{ inputs.deepseek-r1-mxfp4 }}" >> "$GITHUB_OUTPUT" ;;
             gpt-oss-120b) echo "enabled=${{ inputs.gpt-oss-120b }}" >> "$GITHUB_OUTPUT" ;;
+            glm-5-1-fp8-tp8) echo "enabled=${{ inputs.glm-5-1-fp8-tp8 }}" >> "$GITHUB_OUTPUT" ;;
             kimi-k2-thinking-mxfp4-tp4) echo "enabled=${{ inputs.kimi-k2-thinking-mxfp4-tp4 }}" >> "$GITHUB_OUTPUT" ;;
             kimi-k2-thinking-mxfp4-tp8) echo "enabled=${{ inputs.kimi-k2-thinking-mxfp4-tp8 }}" >> "$GITHUB_OUTPUT" ;;
             kimi-k25-mxfp4-tp4) echo "enabled=${{ inputs.kimi-k2-5-mxfp4-tp4 }}" >> "$GITHUB_OUTPUT" ;;
@@ -593,6 +606,7 @@ jobs:
             qwen3-5-397b-a17b-fp8-tp2) echo "enabled=${{ inputs.qwen3-5-397b-a17b-fp8-tp2 }}" >> "$GITHUB_OUTPUT" ;;
             qwen3-5-397b-a17b-fp8-tp4) echo "enabled=${{ inputs.qwen3-5-397b-a17b-fp8-tp4 }}" >> "$GITHUB_OUTPUT" ;;
             qwen3-5-397b-a17b-fp8) echo "enabled=${{ inputs.qwen3-5-397b-a17b-fp8 }}" >> "$GITHUB_OUTPUT" ;;
+            qwen3-5-397b-a17b-mxfp4) echo "enabled=${{ inputs.qwen3-5-397b-a17b-mxfp4 }}" >> "$GITHUB_OUTPUT" ;;
             qwen3-next-80b-a3b-instruct-fp8-tp1) echo "enabled=${{ inputs.qwen3-next-80b-a3b-instruct-fp8-tp1 }}" >> "$GITHUB_OUTPUT" ;;
             qwen3-next-80b-a3b-instruct-fp8-tp4) echo "enabled=${{ inputs.qwen3-next-80b-a3b-instruct-fp8-tp4 }}" >> "$GITHUB_OUTPUT" ;;
             *) echo "enabled=true" >> "$GITHUB_OUTPUT" ;;
@@ -700,6 +714,9 @@ jobs:
         id: gpu-info
         run: |
           GPU_NAME=$(docker exec "$CONTAINER_NAME" rocm-smi --showproductname 2>/dev/null | grep -i "Card Series" | head -1 | sed 's/.*:\s*//' || echo "")
+          if [ -z "$GPU_NAME" ] || echo "$GPU_NAME" | grep -qi "Radeon Graphics"; then
+            GPU_NAME=$(docker exec "$CONTAINER_NAME" rocminfo 2>/dev/null | grep -A1 "Uuid:.*GPU-" | grep "Marketing Name" | head -1 | sed 's/.*:\s*//' | xargs || echo "")
+          fi
           GPU_VRAM_GB=$(docker exec "$CONTAINER_NAME" rocm-smi --showmeminfo vram 2>/dev/null | grep -i "VRAM Total Memory" | head -1 | awk -F: '{printf "%.0f", $NF/(1024*1024*1024)}' || echo "0")
           ROCM_VERSION=$(docker exec "$CONTAINER_NAME" cat /opt/rocm/.info/version 2>/dev/null || echo "unknown")
           echo "gpu_name=${GPU_NAME}" >> $GITHUB_OUTPUT
@@ -973,11 +990,12 @@ jobs:
           BENCHMARK_MATRIX: ${{ needs.build-benchmark-matrix.outputs.benchmark_matrix }}
           RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          python3 .github/scripts/oot_benchmark_summary.py \
+          python3 .github/scripts/plugin_benchmark_summary.py \
             --result-dir . \
             --matrix-json "${BENCHMARK_MATRIX}" \
             --run-url "${RUN_URL}" \
             --output-json oot_benchmark_summary.json \
+            --title "ATOM-vLLM Benchmark Summary" \
             >> "$GITHUB_STEP_SUMMARY"
 
       - name: Read summary stats
@@ -1029,7 +1047,7 @@ jobs:
               continue
             fi
 
-            if python3 .github/scripts/oot_benchmark_validate_baseline.py /tmp/baseline_candidate; then
+            if python3 .github/scripts/plugin_benchmark_validate_baseline.py /tmp/baseline_candidate; then
               mv /tmp/baseline_candidate /tmp/baseline
               BASELINE_DIR="/tmp/baseline"
               echo "Using baseline from run #$PREV_RUN_ID"
@@ -1059,7 +1077,7 @@ jobs:
               >> "$GITHUB_STEP_SUMMARY"
           fi
 
-          python3 .github/scripts/oot_benchmark_regression.py \
+          python3 .github/scripts/plugin_benchmark_regression.py \
             --result-dir . \
             $BASELINE_ARG \
             --output-json regression_report.json \
@@ -1086,10 +1104,11 @@ jobs:
       - name: Transform results for benchmark dashboard
         if: needs.resolve-atom-source.outputs.publish_to_dashboard == 'true' && steps.summary-stats.outputs.passed_cases != '0'
         run: |
-          python3 .github/scripts/oot_benchmark_to_dashboard.py \
+          python3 .github/scripts/plugin_benchmark_to_dashboard.py \
             . \
             --output benchmark-action-input.json \
-            --run-url "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            --run-url "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --default-backend "ATOM-vLLM"
 
       - name: Store benchmark result to dashboard
         if: needs.resolve-atom-source.outputs.publish_to_dashboard == 'true' && steps.summary-stats.outputs.passed_cases != '0'
