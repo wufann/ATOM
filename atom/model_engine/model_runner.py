@@ -1089,27 +1089,50 @@ class ModelRunner:
             # Do NOT add it to block_bytes.
         elif self.is_mimo_v2():
             # MiMo-V2-Flash has mixed attention types (full + SWA) with
-            # different num_kv_heads per layer. Use the max across layer
-            # types as a conservative upper bound for memory estimation.
+            # different num_kv_heads per layer. Count each type separately
+            # for accurate memory estimation.
+            pattern = hf_config.hybrid_layer_pattern
+            num_swa_layers = sum(
+                1 for i in range(hf_config.num_hidden_layers) if pattern[i] == 1
+            )
+            num_full_layers = hf_config.num_hidden_layers - num_swa_layers
+            num_draft_layers = total_num_layers - hf_config.num_hidden_layers
+            num_swa_layers += num_draft_layers
+
             _swa_raw = getattr(hf_config, "swa_num_key_value_heads", 0)
-            _swa_per_rank = (
+            swa_kv_heads = (
                 _swa_raw // self.world_size
                 if _swa_raw >= self.world_size
                 else (1 if _swa_raw else 0)
             )
-            max_kv_heads = max(num_kv_heads, _swa_per_rank)
+
             block_bytes = (
                 2
-                * total_num_layers
+                * num_full_layers
                 * self.block_size
-                * max_kv_heads
+                * num_kv_heads
                 * hf_config.head_dim
                 * kv_dtype_size
             )
             block_bytes += (
                 2
-                * total_num_layers
-                * max_kv_heads
+                * num_swa_layers
+                * self.block_size
+                * swa_kv_heads
+                * hf_config.head_dim
+                * kv_dtype_size
+            )
+            block_bytes += (
+                2
+                * num_full_layers
+                * num_kv_heads
+                * self.physical_block_size
+                * 4  # float32
+            )
+            block_bytes += (
+                2
+                * num_swa_layers
+                * swa_kv_heads
                 * self.physical_block_size
                 * 4  # float32
             )
