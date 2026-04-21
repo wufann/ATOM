@@ -760,9 +760,11 @@ class SpeculativeConfig:
         if hf_config.model_type == "mimo_v2_flash_mtp":
             n_predict = getattr(hf_config, "num_nextn_predict_layers", 3)
             hf_config.update(
-                {"n_predict": n_predict,
-                 "num_nextn_predict_layers": n_predict,
-                 "architectures": ["MiMoV2FlashMTPModel"]}
+                {
+                    "n_predict": n_predict,
+                    "num_nextn_predict_layers": n_predict,
+                    "architectures": ["MiMoV2FlashMTPModel"],
+                }
             )
 
         logger.info(f"hf config is: {hf_config}")

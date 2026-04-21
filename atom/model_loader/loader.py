@@ -30,10 +30,6 @@ from atom.model_ops.moe import (
     is_rocm_aiter_fusion_shared_expert_enabled,
 )
 from aiter.dist.parallel_state import get_tp_group
-from atom.models.mimo_v2_flash_mtp import (
-    get_mimo_v2_spec_layer_idx,
-    rewrite_mimo_v2_spec_layer_name,
-)
 
 from atom.plugin.prepare import is_sglang
 

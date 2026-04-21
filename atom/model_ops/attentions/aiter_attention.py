@@ -419,7 +419,7 @@ class AiterAttentionMetadataBuilder:
         if self.block_size == 1024:
             result = self.set_aiter_persistent_worker_buffers(bs)
         return result
- 
+
     def _prepare_ubatch_decode(
         self,
         scheduled_bs: int,
