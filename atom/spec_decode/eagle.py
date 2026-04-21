@@ -175,21 +175,17 @@ class EagleProposer:
                     input_ids=input_ids,
                     positions=positions,
                     hidden_states=hidden_states,
-                    spec_step_idx=i,
                 )
                 sample_hidden_states = (
                     torch.index_select(ret_hidden_states, 0, last_token_indices)
                     if i == 0
                     else ret_hidden_states
                 )
-                logits = self.model.compute_logits(
-                    sample_hidden_states, spec_step_idx=i
-                )
+                logits = self.model.compute_logits(sample_hidden_states)
                 new_draft_ids = logits.argmax(dim=-1)
                 draft_token_ids[:, i] = new_draft_ids
 
                 if i < self.mtp_k - 1:
-                    use_mla = self.runner.use_mla
                     do_attn_metadata_update = (
                         not context.is_prefill
                         # TODO: FIX this condition after we support3 attention head numbers=32

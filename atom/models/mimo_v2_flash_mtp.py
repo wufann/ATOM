@@ -3,7 +3,6 @@
 """Inference-only MiMo-V2-Flash MTP (Multi-Token Prediction) model."""
 
 import re
-from typing import Optional
 
 import torch
 import torch.nn as nn
@@ -13,7 +12,6 @@ from atom.model_ops.embed_head import ParallelLMHead, VocabParallelEmbedding
 from atom.model_ops.layernorm import RMSNorm
 from atom.models.utils import IntermediateTensors, maybe_prefix
 from atom.utils.decorators import support_torch_compile
-from transformers import PretrainedConfig
 
 from .mimo_v2_flash import MiMoV2Attention, MiMoV2MLP
 
@@ -214,6 +212,7 @@ class MiMoV2FlashMTP(nn.Module):
     def __init__(self, atom_config: Config, prefix: str = ""):
         super().__init__()
         self.config = atom_config.hf_config
+        self._draft_hf_config = atom_config.speculative_config.draft_model_hf_config
 
         self.model = MiMoV2FlashMultiTokenPredictor(
             atom_config=atom_config, prefix=maybe_prefix(prefix, "model")
@@ -247,83 +246,45 @@ class MiMoV2FlashMTP(nn.Module):
     ) -> torch.Tensor | None:
         return self.lm_head(hidden_states)
 
+    _MTP_PATTERN = re.compile(r"model\.mtp\.layers\.(\d+)\.")
+    _PREDICTOR_KEYS = {"enorm", "hnorm", "eh_proj", "final_layernorm"}
 
-# ---------------------------------------------------------------------------
-# Weight remapping utilities for MTP checkpoint -> model parameter mapping
-# ---------------------------------------------------------------------------
+    def remap_mtp_weight_name(self, name: str) -> str | None:
+        """Remap checkpoint MTP weight names to model parameter names.
 
-# Checkpoint pattern: model.mtp.layers.{N}.*
-_MTP_LAYER_PATTERN = re.compile(r"model\.mtp\.layers\.(\d+)\.")
+        Checkpoint format -> Model parameter format:
+            model.mtp.layers.{N}.enorm/hnorm/eh_proj/final_layernorm.*
+                -> model.layers.{L}.enorm/hnorm/eh_proj/final_layernorm.*
+            model.mtp.layers.{N}.pre_mlp_layernorm.*
+                -> model.layers.{L}.mtp_block.post_attention_layernorm.*
+            model.mtp.layers.{N}.embed_tokens.* -> model.embed_tokens.*
+            model.mtp.layers.{N}.<other>.*      -> model.layers.{L}.mtp_block.<other>.*
+            embed_tokens.* / lm_head.*          -> pass through
+        where L = num_hidden_layers + N.
+        """
+        cfg = self._draft_hf_config
+        num_nextn = getattr(cfg, "num_nextn_predict_layers", 0)
+        if num_nextn <= 0:
+            return None
 
-# Weights that live at the predictor level (not inside mtp_block)
-_PREDICTOR_LEVEL_WEIGHTS = {"enorm", "hnorm", "eh_proj", "final_layernorm"}
+        m = self._MTP_PATTERN.match(name)
+        if m is None:
+            # Shared top-level weights (embed_tokens, lm_head)
+            if "embed_tokens" in name or "lm_head" in name:
+                return name
+            return None
 
-# Shared weights that get promoted to top-level model attributes
-_SHARED_WEIGHT_NAMES = {"embed_tokens"}
+        idx = int(m.group(1))
+        if idx >= num_nextn:
+            return None
 
+        layer = cfg.num_hidden_layers + idx
+        suffix = name[m.end() :]
+        if "pre_mlp_layernorm" in suffix:
+            suffix = suffix.replace("pre_mlp_layernorm", "post_attention_layernorm")
 
-def get_mimo_v2_spec_layer_idx(
-    config: PretrainedConfig, weight_name: str
-) -> Optional[int]:
-    """Check if a weight belongs to an MTP layer or is a shared weight.
-
-    Returns the target layer index for MTP layer weights, or -1 for shared
-    weights (embed_tokens, lm_head). Returns None if the weight should be skipped.
-    """
-    num_nextn = getattr(config, "num_nextn_predict_layers", 0)
-    if num_nextn <= 0:
-        return None
-
-    match = _MTP_LAYER_PATTERN.match(weight_name)
-    if match is not None:
-        mtp_layer_idx = int(match.group(1))
-        if mtp_layer_idx < num_nextn:
-            return config.num_hidden_layers + mtp_layer_idx
-        return None
-
-    # Shared weights (embed_tokens, lm_head) are at top level in checkpoint
-    if any(key in weight_name for key in _SHARED_WEIGHT_NAMES):
-        return -1  # sentinel: shared weight, pass through unchanged
-    if "lm_head" in weight_name:
-        return -1
-
-    return None
-
-
-def rewrite_mimo_v2_spec_layer_name(spec_layer: int, name: str) -> str:
-    """Rewrite MTP weight names from checkpoint format to model parameter format.
-
-    The spec_layer is the target layer index (num_hidden_layers + mtp_layer_idx).
-
-    Checkpoint format -> Model parameter format:
-        model.mtp.layers.{N}.enorm.*             -> model.layers.{spec_layer}.enorm.*
-        model.mtp.layers.{N}.hnorm.*             -> model.layers.{spec_layer}.hnorm.*
-        model.mtp.layers.{N}.eh_proj.*           -> model.layers.{spec_layer}.eh_proj.*
-        model.mtp.layers.{N}.final_layernorm.*   -> model.layers.{spec_layer}.final_layernorm.*
-        model.mtp.layers.{N}.pre_mlp_layernorm.* -> model.layers.{spec_layer}.mtp_block.post_attention_layernorm.*
-        model.mtp.layers.{N}.<other>             -> model.layers.{spec_layer}.mtp_block.<other>
-        model.mtp.layers.{N}.embed_tokens.*      -> model.embed_tokens.* (shared, top-level)
-    """
-    # Rename pre_mlp_layernorm -> post_attention_layernorm
-    if "pre_mlp_layernorm" in name:
-        name = name.replace("pre_mlp_layernorm", "post_attention_layernorm")
-
-    match = _MTP_LAYER_PATTERN.match(name)
-    if match is not None:
-        prefix = match.group(0)  # e.g. "model.mtp.layers.0."
-        suffix = name[len(prefix) :]  # everything after the prefix
-
-        # Shared weights promoted to top level
-        for weight_name in _SHARED_WEIGHT_NAMES:
-            if suffix.startswith(weight_name):
-                return f"model.{suffix}"
-
-        # Predictor-level weights stay at the layer level
-        for weight_name in _PREDICTOR_LEVEL_WEIGHTS:
-            if suffix.startswith(weight_name):
-                return f"model.layers.{spec_layer}.{suffix}"
-
-        # All other weights belong to the transformer block
-        return f"model.layers.{spec_layer}.mtp_block.{suffix}"
-
-    return name
+        if suffix.startswith("embed_tokens"):
+            return f"model.{suffix}"
+        if any(suffix.startswith(k) for k in self._PREDICTOR_KEYS):
+            return f"model.layers.{layer}.{suffix}"
+        return f"model.layers.{layer}.mtp_block.{suffix}"
