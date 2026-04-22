@@ -1483,14 +1483,27 @@ class ModelRunner:
                             v_cache = torch.zeros(
                                 self.num_physical_kvcache_blocks,
                                 module_kv_heads,
+                                self.physical_block_size // x,
                                 hf_config.head_dim,
-                                self.physical_block_size,
+                                x,
                                 dtype=kv_dtype,
                                 device="cuda",
                             )
                             if config.kv_cache_dtype == "fp8":
-                                module.k_scale = module.impl.kv_scale
-                                module.v_scale = module.impl.kv_scale
+                                module.k_scale = torch.zeros(
+                                    self.num_physical_kvcache_blocks,
+                                    module_kv_heads,
+                                    self.physical_block_size,
+                                    dtype=dtypes.fp32,
+                                    device="cuda",
+                                )
+                                module.v_scale = torch.zeros(
+                                    self.num_physical_kvcache_blocks,
+                                    module_kv_heads,
+                                    self.physical_block_size,
+                                    dtype=dtypes.fp32,
+                                    device="cuda",
+                                )
                             self._kv_layer_cache_store.append(
                                 (k_cache, v_cache, module.k_scale, module.v_scale)
                             )
