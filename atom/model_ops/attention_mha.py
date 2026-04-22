@@ -169,43 +169,30 @@ class PagedAttentionImpl(nn.Module):
             q, k, v = qkv.split(
                 [self.num_heads, self.num_kv_heads, self.num_kv_heads], dim=1
             )
-        elif use_triton_attn:
+        elif use_triton_attn and self.rotary_emb is not None:
             self.per_token_quant = False
             k_scale = v_scale = self.kv_scale
 
-            if self.rotary_emb is not None:
-                q, k, k_cache, v_cache = fused_qk_rope_reshape_and_cache(
-                    q,
-                    k,
-                    v,
-                    k_cache,
-                    v_cache,
-                    attn_metadata.slot_mapping,
-                    position,
-                    self.rotary_emb.cos_cache,
-                    self.rotary_emb.sin_cache,
-                    k_scale,
-                    v_scale,
-                    self.rotary_emb.is_neox_style,
-                    flash_layout=False,
-                    apply_scale=self.kv_cache_dtype.startswith("fp8"),
-                    offs=None,
-                    q_out=q,
-                    k_out=k,
-                    output_zeros=False,
-                )
-            else:
-                aiter.reshape_and_cache(
-                    k,
-                    v,
-                    k_cache,
-                    v_cache,
-                    attn_metadata.slot_mapping,
-                    kv_cache_dtype=self.kv_cache_dtype,
-                    k_scale=k_scale,
-                    v_scale=v_scale,
-                    asm_layout=False,
-                )
+            q, k, k_cache, v_cache = fused_qk_rope_reshape_and_cache(
+                q,
+                k,
+                v,
+                k_cache,
+                v_cache,
+                attn_metadata.slot_mapping,
+                position,
+                self.rotary_emb.cos_cache,
+                self.rotary_emb.sin_cache,
+                k_scale,
+                v_scale,
+                self.rotary_emb.is_neox_style,
+                flash_layout=False,
+                apply_scale=self.kv_cache_dtype.startswith("fp8"),
+                offs=None,
+                q_out=q,
+                k_out=k,
+                output_zeros=False,
+            )
         else:
             # for asm paged attention
             asm_layout = True
@@ -219,16 +206,34 @@ class PagedAttentionImpl(nn.Module):
             if self.k_norm is not None:
                 k = self.k_norm(k)
             if self.kv_cache_dtype == "fp8":
-                aiter.reshape_and_cache_with_pertoken_quant(
-                    k,
-                    v,
-                    k_cache,
-                    v_cache,
-                    k_scale,
-                    v_scale,
-                    attn_metadata.slot_mapping,
-                    asm_layout=asm_layout,
-                )
+                if use_triton_attn:
+                    # pa_decode_gluon expects a global scalar scale (kv_quant_mode=0),
+                    # matching the fused-kernel path. Use reshape_and_cache with the
+                    # per-tensor kv_scale instead of the per-token variant.
+                    self.per_token_quant = False
+                    k_scale = v_scale = self.kv_scale
+                    aiter.reshape_and_cache(
+                        k,
+                        v,
+                        k_cache,
+                        v_cache,
+                        attn_metadata.slot_mapping,
+                        kv_cache_dtype=self.kv_cache_dtype,
+                        k_scale=k_scale,
+                        v_scale=v_scale,
+                        asm_layout=False,
+                    )
+                else:
+                    aiter.reshape_and_cache_with_pertoken_quant(
+                        k,
+                        v,
+                        k_cache,
+                        v_cache,
+                        k_scale,
+                        v_scale,
+                        attn_metadata.slot_mapping,
+                        asm_layout=asm_layout,
+                    )
             else:
                 aiter.reshape_and_cache(
                     k,

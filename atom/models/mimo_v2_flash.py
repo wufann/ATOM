@@ -233,6 +233,7 @@ class MiMoV2Attention(nn.Module):
             per_layer_sliding_window=sliding_window,
             sinks=self.attention_sink_bias,
             prefix=f"{prefix}.attn",
+            # rotary_emb=self.rotary_emb,
             rotary_emb=None,
         )
 
