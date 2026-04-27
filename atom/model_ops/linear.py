@@ -924,8 +924,20 @@ class QKVParallelLinear(ColumnParallelLinear):
         )
 
     def weight_loader(
-        self, param: nn.Parameter, loaded_weight: torch.Tensor, loaded_shard_id: str
+        self,
+        param: nn.Parameter,
+        loaded_weight: torch.Tensor,
+        loaded_shard_id: str | None = None,
     ):
+        # When loaded_shard_id is None, the checkpoint has a fused qkv_proj
+        # weight (or weight_scale) with TP-aligned block layout.  Chunk by TP
+        # and copy the shard for this rank directly.
+        if loaded_shard_id is None:
+            param_data = param.data
+            loaded_weight = loaded_weight.chunk(self.tp_size, dim=0)[self.tp_rank]
+            param.weight_loader_process(param_data, loaded_weight)
+            return
+
         param_data = param.data
         assert loaded_shard_id in ["q", "k", "v"]
         if loaded_shard_id == "q":

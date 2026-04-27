@@ -34,7 +34,9 @@ class MiMoV2FlashMTPLayer(nn.Module):
         self.hidden_size = config.hidden_size
 
         rope_theta = getattr(config, "rope_theta", 1000000)
-        max_position_embeddings = getattr(config, "max_position_embeddings", 32768)
+        max_position_embeddings = getattr(config, "context_len", None) or getattr(
+            config, "max_position_embeddings", 32768
+        )
         v_scale = getattr(config, "attention_value_scale", None)
 
         # MTP block always uses SWA (sliding window attention)
@@ -213,6 +215,18 @@ class MiMoV2FlashMTP(nn.Module):
         super().__init__()
         self.config = atom_config.hf_config
         self._draft_hf_config = atom_config.speculative_config.draft_model_hf_config
+
+        # Pro checkpoint uses fused qkv_proj; remove q/k/v mappings.
+        original_type = getattr(self.config, "_mimo_original_model_type", None)
+        if (
+            original_type == "mimo_v2_pro"
+            or getattr(self.config, "model_type", None) == "mimo_v2_pro"
+        ):
+            self.packed_modules_mapping = {
+                k: v
+                for k, v in self.packed_modules_mapping.items()
+                if k not in ("q_proj", "k_proj", "v_proj")
+            }
 
         self.model = MiMoV2FlashMultiTokenPredictor(
             atom_config=atom_config, prefix=maybe_prefix(prefix, "model")

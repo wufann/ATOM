@@ -715,6 +715,7 @@ class SpeculativeConfig:
         "qwen3_5_text": "qwen3_5_mtp",
         "qwen3_5_moe_text": "qwen3_5_mtp",
         "mimo_v2_flash": "mimo_v2_flash_mtp",
+        "mimo_v2_pro": "mimo_v2_flash_mtp",
     }
 
     # mtp_model_type → (n_predict_attr, architecture)
@@ -739,6 +740,7 @@ class SpeculativeConfig:
         # Step 1: resolve model_type → mtp model_type
         mtp_type = SpeculativeConfig._MTP_TYPE_MAP.get(hf_config.model_type)
         if mtp_type is not None:
+            hf_config._mimo_original_model_type = hf_config.model_type
             hf_config.model_type = mtp_type
 
         # Step 2: apply MTP-specific config overrides

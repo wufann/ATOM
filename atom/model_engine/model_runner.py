@@ -46,7 +46,6 @@ from atom.utils.forward_context import (
     set_kv_cache_data,
 )
 from atom.utils.selector import get_attn_backend
-from atom.utils.tbo import UBatchWrapper, maybe_create_ubatch_slices
 from torch.profiler import record_function
 
 logger = logging.getLogger("atom")
@@ -67,6 +66,7 @@ support_model_arch_dict = {
     "KimiK25ForConditionalGeneration": "atom.models.kimi_k25.KimiK25ForCausalLM",
     "MiniMaxM2ForCausalLM": "atom.models.minimax_m2.MiniMaxM2ForCausalLM",
     "MiMoV2FlashForCausalLM": "atom.models.mimo_v2_flash.MiMoV2FlashForCausalLM",
+    "MiMoV2ProForCausalLM": "atom.models.mimo_v2_flash.MiMoV2FlashForCausalLM",
 }
 # seed = 34567
 # np.random.seed(seed)
@@ -674,7 +674,7 @@ class ModelRunner:
     def is_mimo_v2(self) -> bool:
         if not hasattr(self.hf_text_config, "model_type"):
             return False
-        elif self.hf_text_config.model_type in ("mimo_v2_flash"):
+        elif self.hf_text_config.model_type in ("mimo_v2_flash", "mimo_v2_pro"):
             return True
         return False
 

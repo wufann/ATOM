@@ -288,7 +288,9 @@ class MiMoV2FlashDecoderLayer(nn.Module):
         self.layer_idx = layer_num
 
         rope_theta = getattr(config, "rope_theta", 1000000)
-        max_position_embeddings = getattr(config, "max_position_embeddings", 32768)
+        max_position_embeddings = getattr(config, "context_len", None) or getattr(
+            config, "max_position_embeddings", 32768
+        )
         v_scale = getattr(config, "attention_value_scale", None)
 
         if self.is_compressed_softmax_layer():
@@ -490,6 +492,16 @@ class MiMoV2FlashForCausalLM(nn.Module):
         super().__init__()
         self.atom_config = atom_config
         self.config = atom_config.hf_config
+
+        # Pro checkpoint stores a fused qkv_proj instead of separate q/k/v_proj.
+        # Remove the q/k/v mappings so the fused weight goes through the
+        # generic loader path and QKVParallelLinear.weight_loader(shard_id=None).
+        if getattr(self.config, "model_type", None) == "mimo_v2_pro":
+            self.packed_modules_mapping = {
+                k: v
+                for k, v in self.packed_modules_mapping.items()
+                if k not in ("q_proj", "k_proj", "v_proj")
+            }
 
         self.model = MiMoV2Model(
             atom_config=atom_config,
