@@ -2125,6 +2125,9 @@ class ModelRunner:
         positions = self.forward_vars["positions"].gpu
         outputs = self.forward_vars["outputs"]
         self.forward_vars["kv_indptr"].gpu.zero_()
+        self.forward_vars["context_lens"].gpu.fill_(1)
+        self.forward_vars["slot_mapping"].gpu.zero_()
+        self.forward_vars["block_tables"].gpu.zero_()
 
         self.graphs: dict[tuple[int, int], torch.cuda.CUDAGraph] = dict()
         self.graph_logits: dict[tuple[int, int], torch.Tensor] = dict()

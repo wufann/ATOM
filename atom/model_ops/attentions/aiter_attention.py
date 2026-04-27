@@ -288,6 +288,30 @@ class AiterAttentionMetadataBuilder:
             "reduce_partial_map": reduce_partial_map,
         }
 
+    def prepare_mtp_decode(
+        self,
+        bs: int,
+        max_seqlen_q: int,
+        max_seqlen_k: int,
+        only_update: bool = False,
+        num_reject_tokens=None,
+    ):
+        var = self.model_runner.forward_vars
+
+        kv_indptr = var["kv_indptr"].gpu[: bs + 1]
+        kv_indices_generate_triton(
+            var["block_tables"].gpu[:bs],
+            var["kv_indices"].gpu,
+            kv_indptr,
+            self.block_ratio,
+            max_seqlen_k,
+        )
+
+        result = {}
+        if self.block_size == 1024:
+            result = self.set_aiter_persistent_worker_buffers(bs)
+        return result
+
     def prepare_decode(self, batch: ScheduledBatch, bs: int):
         scheduled_bs = batch.total_seqs_num_decode
         self.total_blocks = 0
@@ -554,15 +578,16 @@ class AiterAttentionMetadataBuilder:
 
     def build_for_cudagraph_capture(self, bs: int) -> AttentionMetaData:
         var = self.model_runner.forward_vars
+        max_q_len = var["max_qlen"]
         if self.block_size == 1024:
             ctx_pa_ps = self.set_aiter_persistent_worker_buffers(bs)
         else:
             ctx_pa_ps = {}
         attn_metadata = AttentionMetaData(
-            slot_mapping=var["slot_mapping"].gpu[:bs],
+            slot_mapping=var["slot_mapping"].gpu[: bs * max_q_len],
             context_lens=var["context_lens"].gpu[:bs],
             block_tables=var["block_tables"].gpu[:bs],
-            max_seqlen_q=var["max_qlen"],
+            max_seqlen_q=max_q_len,
             cu_seqlens_q=var["cu_seqlens_q"].gpu[: bs + 1],
             kv_indptr=var["kv_indptr"].gpu[: bs + 1],
             kv_indices=var["kv_indices"].gpu,
@@ -575,7 +600,7 @@ class AiterAttentionMetadataBuilder:
             **ctx_pa_ps,
         )
 
-        positions = var["positions"].copy_to_gpu(bs)
+        positions = var["positions"].copy_to_gpu(bs * max_q_len)
         context = Context(
             positions=positions, is_prefill=False, batch_size=bs, graph_bs=bs
         )

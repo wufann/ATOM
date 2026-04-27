@@ -387,6 +387,14 @@ class PagedAttentionImpl(nn.Module):
         if self.sliding_window > 0:
             max_context_partition_num = 1
             context_partition_size = 128
+        elif attn_metadata.max_seqlen_q > 1:
+            # Force one-shot when max_seqlen_q > 1 (MTP with k>1) to avoid
+            # intermediate buffer stride mismatch in pa_decode_gluon: the
+            # temporary_output layout [batch, kv_heads, parts, equiv_group, head]
+            # doesn't match the kernel's expected [batch, query_len, kv_heads,
+            # group_per_len, head] stride interpretation. One-shot writes
+            # directly to the correctly-shaped output_5d.
+            max_context_partition_num = 1
 
         # Output buffers (same as Triton)
         intermediate_shape = (
