@@ -66,7 +66,8 @@ support_model_arch_dict = {
     "Qwen3_5MoeForConditionalGeneration": "atom.models.qwen3_5.Qwen3_5MoeForConditionalGenerationTextOnly",
     "KimiK25ForConditionalGeneration": "atom.models.kimi_k25.KimiK25ForCausalLM",
     "MiniMaxM2ForCausalLM": "atom.models.minimax_m2.MiniMaxM2ForCausalLM",
-    "MiMoV2FlashForCausalLM": "atom.models.mimo_v2_flash.MiMoV2FlashForCausalLM",
+    "MiMoV2ForCausalLM": "atom.models.mimo_v2.MiMoV2ForCausalLM",
+    "MiMoV2FlashForCausalLM": "atom.models.mimo_v2.MiMoV2ForCausalLM",
 }
 # seed = 34567
 # np.random.seed(seed)
@@ -674,7 +675,10 @@ class ModelRunner:
     def is_mimo_v2(self) -> bool:
         if not hasattr(self.hf_text_config, "model_type"):
             return False
-        elif self.hf_text_config.model_type in ("mimo_v2_flash"):
+        elif self.hf_text_config.model_type in (
+            "mimo_v2",
+            "mimo_v2_flash",
+        ):
             return True
         return False
 

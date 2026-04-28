@@ -1,22 +1,26 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Copyright contributors to the vLLM project
-"""Inference-only MiMo-V2-Flash MTP (Multi-Token Prediction) model."""
+"""Inference-only MiMo-V2 MTP (Multi-Token Prediction) model."""
 
 import re
 
 import torch
 import torch.nn as nn
 from aiter.dist.communication_op import tensor_model_parallel_all_reduce
+from aiter.dist.parallel_state import (
+    get_tensor_model_parallel_rank,
+    get_tensor_model_parallel_world_size,
+)
 from atom.config import Config
 from atom.model_ops.embed_head import ParallelLMHead, VocabParallelEmbedding
 from atom.model_ops.layernorm import RMSNorm
 from atom.models.utils import IntermediateTensors, maybe_prefix
 from atom.utils.decorators import support_torch_compile
 
-from .mimo_v2_flash import MiMoV2Attention, MiMoV2MLP
+from .mimo_v2 import MiMoV2Attention, MiMoV2MLP
 
 
-class MiMoV2FlashMTPLayer(nn.Module):
+class MiMoV2MTPLayer(nn.Module):
     """Single transformer decoder block for MTP, using SWA attention + dense MLP."""
 
     def __init__(
@@ -34,7 +38,9 @@ class MiMoV2FlashMTPLayer(nn.Module):
         self.hidden_size = config.hidden_size
 
         rope_theta = getattr(config, "rope_theta", 1000000)
-        max_position_embeddings = getattr(config, "max_position_embeddings", 32768)
+        max_position_embeddings = getattr(config, "context_len", None) or getattr(
+            config, "max_position_embeddings", 32768
+        )
         v_scale = getattr(config, "attention_value_scale", None)
 
         # MTP block always uses SWA (sliding window attention)
@@ -102,7 +108,7 @@ class MiMoV2FlashMTPLayer(nn.Module):
         return hidden_states, residual
 
 
-class MiMoV2FlashMTPPredictorLayer(nn.Module):
+class MiMoV2MTPPredictorLayer(nn.Module):
     """One MTP prediction layer: enorm + hnorm + eh_proj + mtp_block + final_layernorm."""
 
     def __init__(self, atom_config: Config, prefix: str, layer_idx: int) -> None:
@@ -115,7 +121,7 @@ class MiMoV2FlashMTPPredictorLayer(nn.Module):
         self.hnorm = RMSNorm(config.hidden_size, eps=config.layernorm_epsilon)
         self.eh_proj = nn.Linear(config.hidden_size * 2, config.hidden_size, bias=False)
 
-        self.mtp_block = MiMoV2FlashMTPLayer(
+        self.mtp_block = MiMoV2MTPLayer(
             atom_config=atom_config,
             layer_num=layer_idx,
             prefix=f"{prefix}.mtp_block",
@@ -155,7 +161,7 @@ class MiMoV2FlashMTPPredictorLayer(nn.Module):
         return hidden_states
 
 
-class MiMoV2FlashMultiTokenPredictor(nn.Module):
+class MiMoV2MultiTokenPredictor(nn.Module):
     def __init__(self, *, atom_config: Config, prefix: str = ""):
         super().__init__()
         config = atom_config.hf_config
@@ -164,7 +170,7 @@ class MiMoV2FlashMultiTokenPredictor(nn.Module):
 
         self.layers = torch.nn.ModuleDict(
             {
-                str(idx): MiMoV2FlashMTPPredictorLayer(
+                str(idx): MiMoV2MTPPredictorLayer(
                     atom_config, f"{prefix}.layers.{idx}", layer_idx=idx
                 )
                 for idx in range(
@@ -199,7 +205,7 @@ class MiMoV2FlashMultiTokenPredictor(nn.Module):
 
 
 @support_torch_compile
-class MiMoV2FlashMTP(nn.Module):
+class MiMoV2MTP(nn.Module):
 
     packed_modules_mapping = {
         "q_proj": ("qkv_proj", "q"),
@@ -214,7 +220,7 @@ class MiMoV2FlashMTP(nn.Module):
         self.config = atom_config.hf_config
         self._draft_hf_config = atom_config.speculative_config.draft_model_hf_config
 
-        self.model = MiMoV2FlashMultiTokenPredictor(
+        self.model = MiMoV2MultiTokenPredictor(
             atom_config=atom_config, prefix=maybe_prefix(prefix, "model")
         )
 
@@ -224,6 +230,20 @@ class MiMoV2FlashMTP(nn.Module):
             bias=False,
             prefix=maybe_prefix(prefix, "lm_head"),
         )
+
+    def load_fused_qkv_hook(
+        self, name, loaded_weight, params_dict, executor, loaded_weights_record, prefix
+    ):
+        """Handle fused qkv_proj checkpoint weights (Mimo-V2.5-Pro format)."""
+        if "qkv_proj" in name and name in params_dict:
+            tp_size = get_tensor_model_parallel_world_size()
+            tp_rank = get_tensor_model_parallel_rank()
+            param = params_dict[name]
+            weight = loaded_weight.chunk(tp_size, dim=0)[tp_rank]
+            executor.submit(param.weight_loader_process, param.data, weight)
+            loaded_weights_record.add(prefix + name)
+            return True
+        return False
 
     def forward(
         self,

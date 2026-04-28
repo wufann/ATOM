@@ -11,6 +11,7 @@ import torch.nn.functional as F
 from aiter.dist.communication_op import tensor_model_parallel_all_reduce
 from aiter.dist.parallel_state import (
     get_pp_group,
+    get_tensor_model_parallel_rank,
     get_tensor_model_parallel_world_size,
 )
 from aiter.rotary_embedding import get_rope
@@ -270,7 +271,7 @@ class MiMoV2Attention(nn.Module):
         return output
 
 
-class MiMoV2FlashDecoderLayer(nn.Module):
+class MiMoV2DecoderLayer(nn.Module):
     def __init__(
         self,
         atom_config: Config,
@@ -288,7 +289,9 @@ class MiMoV2FlashDecoderLayer(nn.Module):
         self.layer_idx = layer_num
 
         rope_theta = getattr(config, "rope_theta", 1000000)
-        max_position_embeddings = getattr(config, "max_position_embeddings", 32768)
+        max_position_embeddings = getattr(config, "context_len", None) or getattr(
+            config, "max_position_embeddings", 32768
+        )
         v_scale = getattr(config, "attention_value_scale", None)
 
         if self.is_compressed_softmax_layer():
@@ -411,7 +414,7 @@ class MiMoV2Model(nn.Module):
 
         self.start_layer, self.end_layer, self.layers = make_layers(
             self.config.num_hidden_layers,
-            lambda prefix, layer_num=None: MiMoV2FlashDecoderLayer(
+            lambda prefix, layer_num=None: MiMoV2DecoderLayer(
                 atom_config=atom_config,
                 layer_num=layer_num,
                 prefix=prefix,
@@ -473,7 +476,7 @@ class MiMoV2Model(nn.Module):
         )
 
 
-class MiMoV2FlashForCausalLM(nn.Module):
+class MiMoV2ForCausalLM(nn.Module):
     packed_modules_mapping = {
         "q_proj": ("qkv_proj", "q"),
         "k_proj": ("qkv_proj", "k"),
@@ -512,6 +515,26 @@ class MiMoV2FlashForCausalLM(nn.Module):
         self.make_empty_intermediate_tensors = (
             self.model.make_empty_intermediate_tensors
         )
+
+    def load_fused_qkv_hook(
+        self, name, loaded_weight, params_dict, executor, loaded_weights_record, prefix
+    ):
+        """Handle fused qkv_proj checkpoint weights (Mimo-V2.5-Pro format).
+
+        Pro checkpoints store a single qkv_proj weight in TP-interleaved
+        layout.  Chunk by TP rank and copy directly, bypassing the
+        packed_modules_mapping split logic.  For Flash checkpoints the
+        weight names are q_proj/k_proj/v_proj so this hook never fires.
+        """
+        if "qkv_proj" in name and name in params_dict:
+            tp_size = get_tensor_model_parallel_world_size()
+            tp_rank = get_tensor_model_parallel_rank()
+            param = params_dict[name]
+            weight = loaded_weight.chunk(tp_size, dim=0)[tp_rank]
+            executor.submit(param.weight_loader_process, param.data, weight)
+            loaded_weights_record.add(prefix + name)
+            return True
+        return False
 
     def get_input_embeddings(self, input_ids: torch.Tensor) -> torch.Tensor:
         return self.model.get_input_embeddings(input_ids)
