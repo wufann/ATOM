@@ -138,5 +138,15 @@
     "suffix": "",
     "runner": "atom-mi355-8gpu.predownload",
     "env_vars": ""
+  },
+  {
+    "display": "MiMo-V2.5-Pro",
+    "path": "XiaomiMiMo/MiMo-V2.5-Pro",
+    "prefix": "mimo-v25-pro",
+    "args": "--kv_cache_dtype fp8 -tp 8 --trust-remote-code",
+    "bench_args": "",
+    "suffix": "",
+    "runner": "atom-mi355-8gpu.predownload",
+    "env_vars": ""
   }
 ]

@@ -25,7 +25,7 @@ python -m atom.entrypoints.openai_server \
   --kv_cache_dtype fp8 -tp 4 --trust-remote-code
 ```
 
-### Serving MiMo-V2.5-Pro on 4xMI355X GPUs (TP8, FP8 KV Cache)
+### Serving MiMo-V2.5-Pro on 8xMI355X GPUs (TP8, FP8 KV Cache)
 
 ```bash
 python -m atom.entrypoints.openai_server \
