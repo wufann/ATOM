@@ -21,13 +21,13 @@ from typing import TYPE_CHECKING, Any, NamedTuple, Optional
 import torch
 from aiter import dtypes
 from aiter.dist.parallel_state import get_tensor_model_parallel_world_size, get_tp_group
-from aiter.ops.triton.fused_fp8_quant import fused_rms_fp8_group_quant
 from atom.model_ops.base_attention import Attention
 from atom.model_ops.attention_mla import (
     dynamic_per_batched_tensor_quant,
     fused_qk_rope_concat_and_cache_mla,
 )
 from atom.models.utils import maybe_prefix
+from atom.models.deepseek_v2 import _fuse_rmsnorm_quant
 
 # sglang imports
 from sglang.srt.layers.communicator import AttentionInputs, get_attn_tp_context
@@ -117,6 +117,11 @@ def _unwrap_linear_output(output: Any) -> torch.Tensor:
     return output
 
 
+def _linear_quant_type_value(linear: Any) -> Optional[int]:
+    quant_type = getattr(linear, "quant_type", None)
+    return None if quant_type is None else getattr(quant_type, "value", quant_type)
+
+
 def _fuse_qk_rmsnorm_and_q_quant(
     attn: DeepseekV2MLAAttention,
     q: torch.Tensor,
@@ -125,7 +130,6 @@ def _fuse_qk_rmsnorm_and_q_quant(
     output_unquantized_q: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor], torch.Tensor]:
     """Fuse q/k RMSNorm and q quant using ATOM's DeepSeek-V2 path."""
-    from atom.models.deepseek_v2 import _fuse_rmsnorm_quant
 
     (q_quantized, q_scale), q_normed, k_nope_normed, _ = _fuse_rmsnorm_quant(
         q,
@@ -139,6 +143,7 @@ def _fuse_qk_rmsnorm_and_q_quant(
         shuffle=False,
         scale_shuffle_padding=False,
         group_size=128,
+        quant_type=_linear_quant_type_value(attn.q_b_proj),
         output_unquantized_inp1=output_unquantized_q,
         transpose_scale=True,
     )
@@ -151,16 +156,23 @@ def _fuse_qk_rmsnorm(
     k_nope: torch.Tensor,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Fuse q/k RMSNorm without quantizing q."""
-    from atom.models.deepseek_v2 import _fused_qk_rmsnorm
-
-    return _fused_qk_rmsnorm(
+    (q_normed, _), _, k_nope_normed, _ = _fuse_rmsnorm_quant(
         q,
         attn.q_a_layernorm.weight,
         attn.q_a_layernorm.eps,
         k_nope,
         attn.kv_a_layernorm.weight,
         attn.kv_a_layernorm.eps,
+        None,
+        dtype_quant=torch.bfloat16,
+        shuffle=False,
+        scale_shuffle_padding=False,
+        group_size=128,
+        quant_type=None,
+        output_unquantized_inp1=False,
+        transpose_scale=False,
     )
+    return q_normed, k_nope_normed
 
 
 def _prepare_weight_for_bmm(
@@ -596,6 +608,16 @@ def forward_sgl_plugin_mode_mla(
     **model_kwargs,
 ) -> torch.Tensor:
     prepared = forward_sgl_prepare(attn, positions, hidden_states, **model_kwargs)
+    from atom.utils.forward_context import get_forward_context
+
+    if get_forward_context().context.is_dummy_run:
+        base_hidden_states = (
+            hidden_states[0] if isinstance(hidden_states, tuple) else hidden_states
+        )
+        dummy_output = base_hidden_states.new_empty(
+            (base_hidden_states.shape[0], base_hidden_states.shape[-1])
+        )
+        return dummy_output
     return forward_sgl_core(attn, prepared)
 
 
@@ -640,6 +662,7 @@ def forward_sgl_mha_prepare(
     hidden_states: torch.Tensor,
     **model_kwargs,
 ) -> SglMhaPrepareResult:
+
     forward_batch = model_kwargs.get("forward_batch", None)
     if forward_batch is None:
         raise RuntimeError("forward_batch is required in forward_sgl_mha_prepare")
@@ -681,16 +704,17 @@ def forward_sgl_mha_prepare(
             )
 
         if _use_aiter_gfx95 and attn.q_b_proj.weight.dtype == torch.float8_e4m3fn:
-            (q, q_scale), _, _, _ = fused_rms_fp8_group_quant(
+            (q, q_scale), _, _, _ = _fuse_rmsnorm_quant(
                 q,
                 attn.q_a_layernorm.weight,
                 attn.q_a_layernorm.eps,
                 None,
                 None,
                 None,
-                group_size=128,
-                dtype_quant=torch.float8_e4m3fn,
                 res1=None,
+                dtype_quant=torch.float8_e4m3fn,
+                group_size=128,
+                quant_type=_linear_quant_type_value(attn.q_b_proj),
                 output_unquantized_inp1=False,
                 transpose_scale=True,
             )
@@ -715,16 +739,17 @@ def forward_sgl_mha_prepare(
     latent_cache = latent_cache.unsqueeze(1)
 
     if _use_aiter_gfx95 and attn.kv_b_proj.weight.dtype == torch.float8_e4m3fn:
-        (kv_a_quanted, kv_a_quanted_scale), kv_a, _, _ = fused_rms_fp8_group_quant(
+        (kv_a_quanted, kv_a_quanted_scale), kv_a, _, _ = _fuse_rmsnorm_quant(
             kv_a,
             attn.kv_a_layernorm.weight,
             attn.kv_a_layernorm.eps,
             None,
             None,
             None,
-            group_size=128,
-            dtype_quant=torch.float8_e4m3fn,
             res1=None,
+            dtype_quant=torch.float8_e4m3fn,
+            group_size=128,
+            quant_type=_linear_quant_type_value(attn.kv_b_proj),
             output_unquantized_inp1=True,
             transpose_scale=True,
         )

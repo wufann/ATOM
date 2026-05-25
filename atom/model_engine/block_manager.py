@@ -41,14 +41,17 @@ class BlockManager:
         self.used_block_ids: set[int] = set()
         self.enable_prefix_caching = config.enable_prefix_caching
 
-        # Mamba/GDN recurrent state: per-request slot groups + equiv-block accounting
-        # Each slot group contains (1+num_spec) contiguous tensor indices.
-        # free_mamba_slots tracks group indices (0..num_groups-1).
-        self.mamba_equiv_per_req: int = getattr(config, "mamba_equiv_per_req", 0)
-        num_mamba_groups: int = getattr(config, "num_mamba_groups", 0)
-        self.free_mamba_slots: list[int] = list(range(num_mamba_groups))
-        # seq_id → list of accounting block_ids
-        self.mamba_accounting: dict[int, list[int]] = {}
+        # Per-request cache slot pool. Used by attention types with a
+        # stateful per-request buffer (GDN recurrent state, V4 compressor
+        # state). The backing tensor is pre-allocated by ModelRunner sized
+        # to max_num_seqs and excluded from `num_kvcache_blocks` at sizing
+        # time, so admission only needs a free slot index from this list.
+        # Each slot group contains slots_per_req() contiguous tensor indices
+        # (1 for stateless / + num_spec for spec-decoding-aware variants).
+        num_per_req_cache_groups: int = getattr(config, "num_per_req_cache_groups", 0)
+        self.free_per_req_cache_groups: list[int] = list(
+            range(num_per_req_cache_groups)
+        )
 
     @classmethod
     def compute_hash(cls, token_ids: list[int], prefix: int = -1):
@@ -85,12 +88,15 @@ class BlockManager:
         self.free_block_ids_set.add(block_id)
 
     def can_allocate(self, seq: Sequence) -> bool:
-        mamba_cost = self.mamba_equiv_per_req if seq.mamba_enabled else 0
-        mamba_slot_ok = (not seq.mamba_enabled) or len(self.free_mamba_slots) > 0
+        # State cache (mamba / V4 compressor ring) has its own pre-allocated
+        # tensor; admission only needs a free slot index, not extra paged
+        # blocks. See `allocate()` for the budget reasoning.
+        per_req_cache_slot_ok = (not seq.has_per_req_cache) or len(
+            self.free_per_req_cache_groups
+        ) > 0
         if not self.enable_prefix_caching:
             return (
-                len(self.free_block_ids_set) >= seq.num_blocks + mamba_cost
-                and mamba_slot_ok
+                len(self.free_block_ids_set) >= seq.num_blocks and per_req_cache_slot_ok
             )
         # Dry-run: count how many blocks would be cache hits
         h = -1
@@ -106,11 +112,18 @@ class BlockManager:
             block_id = self.hash_to_block_id.get(h, -1)
             if block_id == -1 or self.blocks[block_id].token_ids != token_ids:
                 cache_miss = True
+            # If the entire prompt would be cached, force the last full block
+            # to recompute so prefill has at least one token to forward and
+            # produce logits for the next-token sampler.
+            if (
+                not cache_miss
+                and i == seq.num_blocks - 1
+                and len(token_ids) == self.block_size
+            ):
+                cache_miss = True
             if cache_miss:
                 needed_free += 1
-        return (
-            len(self.free_block_ids_set) >= needed_free + mamba_cost and mamba_slot_ok
-        )
+        return len(self.free_block_ids_set) >= needed_free and per_req_cache_slot_ok
 
     def allocate(self, seq: Sequence):
         assert not seq.block_table
@@ -129,6 +142,16 @@ class BlockManager:
             )
             if block_id == -1 or self.blocks[block_id].token_ids != token_ids:
                 cache_miss = True
+            # If the entire prompt would be cached, force the last full block
+            # to recompute so prefill has at least one token to forward and
+            # produce logits for the next-token sampler. Must mirror the same
+            # condition in can_allocate() so the block budget agrees.
+            if (
+                not cache_miss
+                and i == seq.num_blocks - 1
+                and len(token_ids) == self.block_size
+            ):
+                cache_miss = True
             if cache_miss:
                 block_id = self._pop_free_block()
                 block = self._allocate_block(block_id)
@@ -144,15 +167,16 @@ class BlockManager:
                 self.hash_to_block_id[h] = block_id
             seq.block_table.append(block_id)
 
-        # Mamba/GDN recurrent state: allocate equiv blocks (accounting) + slot (indexing)
-        if seq.mamba_enabled:
-            accounting_blocks = []
-            for _ in range(self.mamba_equiv_per_req):
-                block_id = self._pop_free_block()
-                self._allocate_block(block_id)
-                accounting_blocks.append(block_id)
-            self.mamba_accounting[seq.id] = accounting_blocks
-            seq.mamba_state_slot = self.free_mamba_slots.pop()
+        # Per-request cache: claim one slot index from the pre-allocated
+        # state tensor (e.g. GDN mamba_k_cache, V4 compressor state + SWA
+        # ring). The state tensor's memory was already excluded from
+        # `num_kvcache_blocks` in ModelRunner._compute_kv_budget() — see
+        # `available_for_pool = available_for_kv - per_req_cache_tensor_bytes`
+        # — so admitting a seq adds no further paged-block cost. The slot
+        # cap (`free_per_req_cache_groups` size = `max_num_seqs`) is the
+        # sole admission bound for state cache.
+        if seq.has_per_req_cache:
+            seq.per_req_cache_group = self.free_per_req_cache_groups.pop()
 
     def deallocate(self, seq: Sequence):
         for block_id in reversed(seq.block_table):
@@ -162,13 +186,9 @@ class BlockManager:
                 self._deallocate_block(block_id)
         seq.num_cached_tokens = 0
         seq.block_table.clear()
-        if seq.mamba_enabled and seq.mamba_state_slot >= 0:
-            for block_id in self.mamba_accounting.pop(seq.id, []):
-                block = self.blocks[block_id]
-                block.ref_count = 0  # accounting blocks bypass ref-counting
-                self._deallocate_block(block_id)
-            self.free_mamba_slots.append(seq.mamba_state_slot)
-            seq.mamba_state_slot = -1
+        if seq.has_per_req_cache and seq.per_req_cache_group >= 0:
+            self.free_per_req_cache_groups.append(seq.per_req_cache_group)
+            seq.per_req_cache_group = -1
 
     def can_append(self, seq: Sequence, num_new_tokens: int = 1) -> bool:
         seq_len = len(seq)
