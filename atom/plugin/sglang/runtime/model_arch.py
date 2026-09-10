@@ -14,6 +14,7 @@ MODEL_TYPE_ADAPTER_ARCHES = {
     GLM52_DSA_MODEL_TYPE: GLM52_DSA_ARCH,
     "deepseek_v4": "DeepseekV4ForCausalLM",
     "kimi_k3": "KimiK3ForConditionalGeneration",
+    "mimo_v2": "MiMoV2ForCausalLM",
     "minimax_m3": "MiniMaxM3SparseForCausalLM",
     "minimax_m3_vl": "MiniMaxM3SparseForConditionalGeneration",
     "qwen3": "Qwen3ForCausalLM",
@@ -118,6 +119,20 @@ def _prepare_minimax_m2_config(atom_config: Any, model_arch: str) -> None:
     quant_config.remap_layer_name(
         atom_config.hf_config,
         packed_modules_mapping=MiniMaxM2ForCausalLM.packed_modules_mapping,
+    )
+
+
+def _prepare_mimo_v2_config(atom_config: Any, model_arch: str) -> None:
+    del model_arch
+    quant_config = getattr(atom_config, "quant_config", None)
+    if quant_config is None:
+        return
+
+    from atom.models.mimo_v2 import MiMoV2ForCausalLM
+
+    quant_config.remap_layer_name(
+        atom_config.hf_config,
+        packed_modules_mapping=MiMoV2ForCausalLM.packed_modules_mapping,
     )
 
 
@@ -450,6 +465,9 @@ MODEL_ADAPTER_SPECS = {
     ),
     "Qwen3ForCausalLM": SGLangModelAdapterSpec(),
     "Qwen3MoeForCausalLM": SGLangModelAdapterSpec(),
+    "MiMoV2ForCausalLM": SGLangModelAdapterSpec(
+        prepare_config=_prepare_mimo_v2_config,
+    ),
     "Qwen3NextForCausalLM": SGLangModelAdapterSpec(
         wrapper_binds_gdn_context=True,
     ),
@@ -507,6 +525,7 @@ MODEL_ARCH_SPECS = {
         "Qwen3MoeForCausalLM",
         "Qwen3NextForCausalLM",
         "MiniMaxM2ForCausalLM",
+        "MiMoV2ForCausalLM",
         "MiniMaxM3SparseForCausalLM",
         "MiniMaxM3SparseForConditionalGeneration",
         "LlamaForCausalLMEagle3",

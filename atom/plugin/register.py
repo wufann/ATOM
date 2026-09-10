@@ -7,6 +7,7 @@ from atom.config import Config
 from atom.models.deepseek_v2 import DeepseekV3ForCausalLM, GlmMoeDsaForCausalLM
 from atom.models.glm4_moe import Glm4MoeForCausalLM
 from atom.models.minimax_m2 import MiniMaxM2ForCausalLM
+from atom.models.mimo_v2 import MiMoV2ForCausalLM
 from atom.models.minimax_m3 import (
     MiniMaxM3SparseForCausalLM,
     MiniMaxM3SparseForConditionalGeneration,
@@ -29,6 +30,7 @@ _ATOM_SUPPORTED_MODELS = {
     "DeepseekV32ForCausalLM": DeepseekV3ForCausalLM,
     "GlmMoeDsaForCausalLM": GlmMoeDsaForCausalLM,
     "MiniMaxM2ForCausalLM": MiniMaxM2ForCausalLM,
+    "MiMoV2ForCausalLM": MiMoV2ForCausalLM,
     "MiniMaxM3SparseForCausalLM": MiniMaxM3SparseForCausalLM,
     "MiniMaxM3SparseForConditionalGeneration": MiniMaxM3SparseForConditionalGeneration,
     "Qwen3_5MoeForConditionalGeneration": Qwen3_5MoeForConditionalGenerationTextOnly,

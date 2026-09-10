@@ -1751,6 +1751,12 @@ class ATOMAttnBackendForSgl(AiterAttnBackend):
             return page_table_persistent[:bs, :], seq_lens_persistent[:bs]
         return page_table_persistent[:bs, :max_seq_pages], seq_lens_persistent[:bs]
 
+    def _layer_sink_ptr(self, layer):
+        sinks = getattr(layer, "sinks", None)
+        if sinks is not None and sinks.dtype != torch.float32:
+            sinks = sinks.to(torch.float32)
+        return sinks
+
     def _should_use_native_dense_mha(self, layer) -> bool:
         sliding_window_size = getattr(layer, "sliding_window_size", None)
         return (
@@ -2002,6 +2008,12 @@ class ATOMAttnBackendForSgl(AiterAttnBackend):
         )
         if q.dtype != k.dtype and k.dtype == dtypes.fp8:
             q = q.to(dtypes.fp8)
+        sliding_window_size = getattr(layer, "sliding_window_size", -1)
+        window_size = (
+            (sliding_window_size, 0, 0)
+            if sliding_window_size and sliding_window_size > 0
+            else (-1, -1, 0)
+        )
         o = flash_attn_varlen_func(
             q.contiguous().view(-1, layer.tp_q_head_num, layer.head_dim),
             k.contiguous().view(-1, layer.tp_k_head_num, layer.head_dim),
@@ -2014,8 +2026,8 @@ class ATOMAttnBackendForSgl(AiterAttnBackend):
             dropout_p=0.0,
             softmax_scale=self.scale,
             causal=True,
-            window_size=(-1, -1, 0),
-            sink_ptr=None,
+            window_size=window_size,
+            sink_ptr=self._layer_sink_ptr(layer),
         )
         return o.view(-1, layer.tp_q_head_num * layer.head_dim)
 
@@ -2757,8 +2769,8 @@ class ATOMAttnBackendForSgl(AiterAttnBackend):
                 max_logits=max_logits,
                 temporary_output=temporary_output,
                 alibi_slopes=None,
-                sinks=None,
-                sliding_window=-1,
+                sinks=self._layer_sink_ptr(layer),
+                sliding_window=getattr(layer, "sliding_window_size", -1),
                 ps=True,
             )
             return out.reshape_as(q)
